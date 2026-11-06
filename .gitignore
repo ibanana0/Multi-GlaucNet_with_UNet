@@ -1,0 +1,37 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# PyTorch checkpoints and model weights
+checkpoints/*.pth
+checkpoints/*/*.pth
+*.pt
+*.pth
+
+# Dataset storage (ignore heavy image files & zip archives, keep directory)
+data/raw/smdg-19/*.zip
+data/raw/smdg-19/full-fundus/
+data/raw/smdg-19/optic-disc/
+data/raw/smdg-19/blood-vessel/
+data/processed/
+
+# Kaggle credentials
+.kaggle/
+kaggle.json
+
+# IDE and OS artifacts
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Results / logs
+results/*.png
+results/visualizations/*.png

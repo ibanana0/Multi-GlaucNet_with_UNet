@@ -1,0 +1,17 @@
+image_id,fundus_path,od_mask_path,vessel_mask_path,glaucoma_label,dataset_source
+sample_0000,full-fundus/sample_0000.png,optic-disc/sample_0000_od.png,blood-vessel/sample_0000_vessel.png,1,SYNTHETIC-SMDG
+sample_0001,full-fundus/sample_0001.png,optic-disc/sample_0001_od.png,blood-vessel/sample_0001_vessel.png,0,SYNTHETIC-SMDG
+sample_0002,full-fundus/sample_0002.png,optic-disc/sample_0002_od.png,blood-vessel/sample_0002_vessel.png,0,SYNTHETIC-SMDG
+sample_0003,full-fundus/sample_0003.png,optic-disc/sample_0003_od.png,blood-vessel/sample_0003_vessel.png,1,SYNTHETIC-SMDG
+sample_0004,full-fundus/sample_0004.png,optic-disc/sample_0004_od.png,blood-vessel/sample_0004_vessel.png,0,SYNTHETIC-SMDG
+sample_0005,full-fundus/sample_0005.png,optic-disc/sample_0005_od.png,blood-vessel/sample_0005_vessel.png,0,SYNTHETIC-SMDG
+sample_0006,full-fundus/sample_0006.png,optic-disc/sample_0006_od.png,blood-vessel/sample_0006_vessel.png,1,SYNTHETIC-SMDG
+sample_0007,full-fundus/sample_0007.png,optic-disc/sample_0007_od.png,blood-vessel/sample_0007_vessel.png,0,SYNTHETIC-SMDG
+sample_0008,full-fundus/sample_0008.png,optic-disc/sample_0008_od.png,blood-vessel/sample_0008_vessel.png,0,SYNTHETIC-SMDG
+sample_0009,full-fundus/sample_0009.png,optic-disc/sample_0009_od.png,blood-vessel/sample_0009_vessel.png,1,SYNTHETIC-SMDG
+sample_0010,full-fundus/sample_0010.png,optic-disc/sample_0010_od.png,blood-vessel/sample_0010_vessel.png,0,SYNTHETIC-SMDG
+sample_0011,full-fundus/sample_0011.png,optic-disc/sample_0011_od.png,blood-vessel/sample_0011_vessel.png,0,SYNTHETIC-SMDG
+sample_0012,full-fundus/sample_0012.png,optic-disc/sample_0012_od.png,blood-vessel/sample_0012_vessel.png,1,SYNTHETIC-SMDG
+sample_0013,full-fundus/sample_0013.png,optic-disc/sample_0013_od.png,blood-vessel/sample_0013_vessel.png,0,SYNTHETIC-SMDG
+sample_0014,full-fundus/sample_0014.png,optic-disc/sample_0014_od.png,blood-vessel/sample_0014_vessel.png,0,SYNTHETIC-SMDG
+sample_0015,full-fundus/sample_0015.png,optic-disc/sample_0015_od.png,blood-vessel/sample_0015_vessel.png,1,SYNTHETIC-SMDG

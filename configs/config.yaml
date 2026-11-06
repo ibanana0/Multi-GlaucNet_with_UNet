@@ -1,0 +1,55 @@
+# Konfigurasi Eksperimen MultiGlaucNet (Vanilla & Hybrid DUNet)
+project_name: "MultiGlaucNet_Glaucoma_Detection"
+random_seed: 42
+
+# Pengaturan Path Dataset
+data:
+  raw_dir: "data/raw/smdg-19"
+  processed_dir: "data/processed/smdg-19"
+  kaggle_dataset_slug: "deathtrooper/multichannel-glaucoma-benchmark-dataset"
+  target_resolution: [512, 512]
+  clahe:
+    clip_limit: 2.0
+    tile_grid_size: [8, 8]
+  splits:
+    train: 0.70
+    val: 0.15
+    test: 0.15
+
+# Pelatihan Tahap 1: Segmentasi (DUNet)
+segmentation:
+  batch_size: 4
+  epochs: 50
+  learning_rate: 0.0001
+  loss_type: "bce_dice"  # bce_dice atau dice
+  variants:
+    vanilla:
+      name: "Vanilla_DUNet"
+    hybrid:
+      name: "Hybrid_DUNet_DCN_PixelShuffle_CAM"
+
+# Pelatihan Tahap 2: Deteksi Glaukoma (Three-Branch ResNet50)
+detection:
+  batch_size: 8
+  epochs: 40
+  learning_rate: 0.00005
+  backbone: "resnet50"
+  pretrained: true
+  fusion_method: "average"  # average atau concatenation
+  focal_loss_ablation:
+    scenario_1:
+      name: "Baseline_CrossEntropy"
+      gamma: 0.0
+      alpha: 1.0
+    scenario_2:
+      name: "Standard_FocalLoss"
+      gamma: 2.0
+      alpha: "auto"  # auto dihitung dari N_normal / N_glaucoma
+    scenario_3:
+      name: "Extreme_MultiGlaucNet"
+      gamma: 10.0
+      alpha: 3.0
+
+output:
+  checkpoint_dir: "checkpoints"
+  results_dir: "results"

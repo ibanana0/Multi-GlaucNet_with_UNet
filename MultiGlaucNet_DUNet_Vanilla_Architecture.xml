@@ -1,0 +1,153 @@
+<?xml version="1.0" ?>
+<MultiGlaucNetArchitecture version="2.1-Vanilla" variant="Vanilla-DUNet-MultiGlaucNet" author="Jin et al. (DUNet) + Xiong et al. (MultiGlaucNet Integration)" year="2026">
+  <Overview>Rancangan arsitektur Vanilla (Baseline) yang mengintegrasikan model DUNet murni (Jin et al., RanSuLab) secara presisi pada modul segmentasi Optic Disc (OD) dan pembuluh darah retina, digabungkan dengan Three-Branch ResNet50 untuk deteksi glaukoma dengan strategi Two-Stage Training pada dataset SMDG-19.</Overview>
+
+  <Phase name="Pre-Processing" order="1">
+    <Step id="PRE-01" name="Resizing">
+      <Description>Meresize seluruh citra fundus retina asli (RGB) dari dataset SMDG-19 menjadi resolusi uniform 512x512 piksel.</Description>
+      <Parameters>
+        <Param name="TargetResolution">512x512x3</Param>
+      </Parameters>
+    </Step>
+    <Step id="PRE-02" name="Cropping ROI">
+      <Description>Memotong area background hitam non-retina di sekitar bola mata untuk memfokuskan area komputasi spasial.</Description>
+    </Step>
+    <Step id="PRE-03" name="CLAHE">
+      <Description>Menerapkan Contrast-Limited Adaptive Histogram Equalization untuk meningkatkan kontras lokal.</Description>
+      <Parameters>
+        <Param name="ClipLimit">2.0</Param>
+        <Param name="TileGridSize">8x8</Param>
+        <Param name="Purpose">Memperjelas batas Optic Disc (OD) dan percabangan halus pembuluh darah retina.</Param>
+      </Parameters>
+    </Step>
+  </Phase>
+
+  <Phase name="SegmentationModules_Vanilla" order="2">
+    <Description>Dua jaringan independen berbasis DUNet murni (Jin et al., 2019) untuk segmentasi OD dan pembuluh darah retina, persis sesuai implementasi deform_unet.py.</Description>
+    
+    <SubModule name="Vanilla_DUNet_Encoder">
+      <Architecture>
+        <!-- Level 0: inc (inconv) -->
+        <Layer id="ENC-0" type="InConv" name="inc" in_channels="3" out_channels="64">
+          <SubLayers>DoubleConv(Conv2d(3, 64, 3, pad=1) -> BatchNorm2d -> ReLU -> Conv2d(64, 64, 3, pad=1) -> BatchNorm2d -> ReLU)</SubLayers>
+          <OutputResolution>512x512x64</OutputResolution>
+        </Layer>
+        <!-- Level 1: down1 (deform_down) -->
+        <Layer id="ENC-1" type="DeformDown" name="down1" in_channels="64" out_channels="128">
+          <SubLayers>MaxPool2d(2) -> DoubleDeformConv(DeformConv2d(64, 128, 3, pad=0) -> BN -> ReLU -> DeformConv2d(128, 128, 3, pad=0) -> BN -> ReLU)</SubLayers>
+          <OutputResolution>256x256x128</OutputResolution>
+        </Layer>
+        <!-- Level 2: down2 (deform_down) -->
+        <Layer id="ENC-2" type="DeformDown" name="down2" in_channels="128" out_channels="256">
+          <SubLayers>MaxPool2d(2) -> DoubleDeformConv(DeformConv2d(128, 256, 3, pad=0) -> BN -> ReLU -> DeformConv2d(256, 256, 3, pad=0) -> BN -> ReLU)</SubLayers>
+          <OutputResolution>128x128x256</OutputResolution>
+        </Layer>
+        <!-- Level 3: down3 (standard down) -->
+        <Layer id="ENC-3" type="StandardDown" name="down3" in_channels="256" out_channels="512">
+          <SubLayers>MaxPool2d(2) -> DoubleConv(Conv2d(256, 512, 3, pad=1) -> BN -> ReLU -> Conv2d(512, 512, 3, pad=1) -> BN -> ReLU)</SubLayers>
+          <OutputResolution>64x64x512</OutputResolution>
+        </Layer>
+        <!-- Level 4: down4 (standard down, bottleneck) -->
+        <Layer id="ENC-4" type="StandardDown" name="down4" in_channels="512" out_channels="512">
+          <SubLayers>MaxPool2d(2) -> DoubleConv(Conv2d(512, 512, 3, pad=1) -> BN -> ReLU -> Conv2d(512, 512, 3, pad=1) -> BN -> ReLU)</SubLayers>
+          <OutputResolution>32x32x512</OutputResolution>
+        </Layer>
+      </Architecture>
+      <KeyFeature>Deformable Convolutions (DCNv2) diterapkan secara spesifik pada resolusi tinggi/menengah (Stage 1 dan Stage 2) untuk menangkap morfologi lengkungan pembuluh darah tanpa pemborosan komputasi pada representasi semantik rendah.</KeyFeature>
+    </SubModule>
+
+    <SubModule name="Vanilla_DUNet_Decoder">
+      <Architecture>
+        <!-- Level 1: up1 (standard up) -->
+        <Layer id="DEC-1" type="StandardUp" name="up1" in_channels="1024" out_channels="256">
+          <SubLayers>Upsample(scale=2, mode='bilinear') -> Concat(x_skip=down3) -> DoubleConv(Conv2d(1024, 256, 3, pad=1) -> BN -> ReLU)</SubLayers>
+          <OutputResolution>64x64x256</OutputResolution>
+        </Layer>
+        <!-- Level 2: up2 (standard up) -->
+        <Layer id="DEC-2" type="StandardUp" name="up2" in_channels="512" out_channels="128">
+          <SubLayers>Upsample(scale=2, mode='bilinear') -> Concat(x_skip=down2) -> DoubleConv(Conv2d(512, 128, 3, pad=1) -> BN -> ReLU)</SubLayers>
+          <OutputResolution>128x128x128</OutputResolution>
+        </Layer>
+        <!-- Level 3: up3 (deform_up) -->
+        <Layer id="DEC-3" type="DeformUp" name="up3" in_channels="256" out_channels="64">
+          <SubLayers>Upsample(scale=2, mode='bilinear') -> Concat(x_skip=down1) -> DoubleDeformConv(DeformConv2d(256, 64, 3, pad=0) -> BN -> ReLU -> DeformConv2d(64, 64, 3, pad=0) -> BN -> ReLU)</SubLayers>
+          <OutputResolution>256x256x64</OutputResolution>
+        </Layer>
+        <!-- Level 4: up4 (deform_up) -->
+        <Layer id="DEC-4" type="DeformUp" name="up4" in_channels="128" out_channels="64">
+          <SubLayers>Upsample(scale=2, mode='bilinear') -> Concat(x_skip=inc) -> DoubleDeformConv(DeformConv2d(128, 64, 3, pad=0) -> BN -> ReLU -> DeformConv2d(64, 64, 3, pad=0) -> BN -> ReLU)</SubLayers>
+          <OutputResolution>512x512x64</OutputResolution>
+        </Layer>
+        <!-- Input Skip Concatenation khas DUNet Jin et al. -->
+        <Layer id="DEC-5" type="InputSkipConcat" name="input_skip">
+          <Operation>torch.cat([inp, x], dim=1)</Operation>
+          <Description>Menggabungkan citra asli (3 channel) langsung ke feature map akhir decoder (64 channel) menghasilkan tensor 67 channel.</Description>
+          <OutputResolution>512x512x67</OutputResolution>
+        </Layer>
+        <!-- Output Final Conv -->
+        <Layer id="DEC-6" type="FinalConv" name="outc" in_channels="67" out_channels="1">
+          <SubLayers>Conv2d(67, 1, kernel_size=1) -> Sigmoid()</SubLayers>
+          <OutputResolution>512x512x1</OutputResolution>
+        </Layer>
+      </Architecture>
+    </SubModule>
+
+    <LossFunction type="DiceLoss">
+      <Formula>DiceLoss = 1 - (2 * sum(p_i * g_i)) / (sum(p_i) + sum(g_i))</Formula>
+      <AlternativeLoss>BCE_Dice_Loss = BCELoss + DiceLoss</AlternativeLoss>
+    </LossFunction>
+  </Phase>
+
+  <Phase name="Post-Processing_and_Masking" order="3">
+    <Step id="POST-01" name="Binarization">
+      <Description>Mengubah probability map hasil DUNet Vanilla menjadi masker biner tegas (0 dan 1) melalui thresholding t=0.5.</Description>
+    </Step>
+    <Step id="POST-02" name="ElementwiseMultiplication">
+      <Description>Mengalikan masker biner secara piksel demi piksel dengan citra asli fundus untuk mengisolasi area anatomis.</Description>
+      <Output_OD>I_OD = I_orig * M_OD</Output_OD>
+      <Output_Vessel>I_vessel = I_orig * M_vessel</Output_Vessel>
+    </Step>
+    <TrainingStrategy type="TwoStageTraining">
+      <Stage1>Latih modul segmentasi DUNet hingga konvergen dengan Dice Loss pada ground-truth OD dan pembuluh darah SMDG-19.</Stage1>
+      <Stage2>Kunci (freeze) seluruh bobot parameter DUNet. Hasilkan masker biner I_OD dan I_vessel, lalu latih modul deteksi Three-Branch ResNet50 secara mandiri. Strategi ini mengatasi pemutusan gradien akibat fungsi binarisasi non-diferensiabel.</Stage2>
+    </TrainingStrategy>
+  </Phase>
+
+  <Phase name="GlaucomaDetectionModule" order="4">
+    <Architecture type="ThreeBranchResNet50">
+      <Branch id="Branch-1" input="I_orig" feature="Global_Retinal_Context"/>
+      <Branch id="Branch-2" input="I_OD" feature="Local_Optic_Disc_Context"/>
+      <Branch id="Branch-3" input="I_vessel" feature="Local_Vessel_Context"/>
+    </Architecture>
+    <FusionAndClassification>
+      <Method>Average Pooling dari ketiga output cabang ResNet50</Method>
+      <Classifier>Fully Connected Layer (2 Output Classes: Normal vs Glaucoma)</Classifier>
+    </FusionAndClassification>
+    <LossFunction type="FocalLoss" ablation_planned="true">
+      <Formula>FL(p_t) = -alpha * (1 - p_t)^gamma * log(p_t)</Formula>
+      <AblationScenarios>
+        <Scenario id="SC-1" name="Baseline">Standard Cross-Entropy (gamma=0, alpha=1.0)</Scenario>
+        <Scenario id="SC-2" name="Standard_Literature">Focal Loss (gamma=2.0, alpha=N_normal/N_glaucoma empiris SMDG-19)</Scenario>
+        <Scenario id="SC-3" name="Extreme_Paper">Focal Loss acuan MultiGlaucNet (gamma=10.0, alpha=3.0)</Scenario>
+      </AblationScenarios>
+      <Purpose>Menguji pengaruh penekanan sampel mudah terhadap dataset SMDG-19.</Purpose>
+    </LossFunction>
+  </Phase>
+
+  <Phase name="EvaluationMetrics" order="5">
+    <Metrics task="Segmentation">
+      <Metric name="DiceCoefficient"/>
+      <Metric name="Accuracy"/>
+      <Metric name="F1-Score"/>
+      <Metric name="Sensitivity"/>
+      <Metric name="Specificity"/>
+    </Metrics>
+    <Metrics task="GlaucomaDetection">
+      <Metric name="Accuracy"/>
+      <Metric name="Sensitivity"/>
+      <Metric name="Specificity"/>
+      <Metric name="AUC_ROC"/>
+      <Metric name="ConfusionMatrix"/>
+    </Metrics>
+  </Phase>
+</MultiGlaucNetArchitecture>

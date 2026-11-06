@@ -1,0 +1,165 @@
+<?xml version="1.0" ?>
+<MultiGlaucNetArchitecture version="2.1-Hybrid" variant="Hybrid-DUNet-MultiGlaucNet" author="DUNet (Jin et al.) + MultiGlaucNet (Xiong et al.) Novelty Integration" year="2026">
+  <Overview>Rancangan arsitektur Hibrida (Novelty) yang menyempurnakan Multi-GlaucNet dengan mengintegrasikan Deformable Convolutional Network (DCNv2 dari DUNet) pada Encoder Bottleneck blocks, dipadukan dengan 5-Stage PixelShuffle Decoder dan Channel Attention Mechanism (CAM) untuk segmentasi presisi tinggi pada Optic Disc dan pembuluh darah, serta Three-Branch ResNet50 untuk deteksi glaukoma dengan strategi Two-Stage Training.</Overview>
+
+  <PipelineNotes>
+    <Note id="NOTE-01" topic="Spatial Dimension Alignment">
+      Pada backbone berbasis ResNet-101/50, reduksi spasial dari 512x512 mencapai 32x (fitur terdalam 16x16). Decoder hibrida dirancang secara presisi dengan 5 tahap upsampling PixelShuffle (16 -> 32 -> 64 -> 128 -> 256 -> 512) agar dimensi masker luaran kembali utuh 512x512x1 sesuai resolusi citra input tanpa interpolasi artifisial.
+    </Note>
+    <Note id="NOTE-02" topic="Deformable Bottleneck Integration">
+      Layer konvolusi 3x3 standar di dalam setiap Bottleneck block digantikan oleh Deformable Convolution (DCNv2) dengan learned 2D offsets adaptif. Ini memberikan receptive field fleksibel yang mengikuti lengkungan pembuluh darah dan kontur batas Optic Disc (OD).
+    </Note>
+    <Note id="NOTE-03" topic="Channel Attention Synergy">
+      Setelah penggabungan skip connection pada decoder, Channel Attention Mechanism (CAM/SE-Block) mengalibrasi pembobotan channel secara dinamis guna menekan noise background retina dan memperkuat sinyal tepi struktural OD dan vaskular.
+    </Note>
+    <Note id="NOTE-04" topic="Two-Stage Decoupled Training">
+      Mengadopsi strategi Two-Stage Training untuk memisahkan fase segmentasi dan deteksi, mengatasi masalah pemutusan gradien (non-differentiable) akibat binarisasi tegas (thresholding t=0.5).
+    </Note>
+  </PipelineNotes>
+
+  <Phase name="Pre-Processing" order="1">
+    <Step id="PRE-01" name="Resizing">
+      <Description>Meresize seluruh citra fundus retina asli (RGB) dari dataset SMDG-19 menjadi resolusi uniform 512x512 piksel.</Description>
+      <Parameters>
+        <Param name="TargetResolution">512x512x3</Param>
+      </Parameters>
+    </Step>
+    <Step id="PRE-02" name="Cropping ROI">
+      <Description>Memotong area background hitam non-retina di sekitar bola mata untuk memfokuskan area komputasi spasial.</Description>
+    </Step>
+    <Step id="PRE-03" name="CLAHE">
+      <Description>Menerapkan Contrast-Limited Adaptive Histogram Equalization untuk meningkatkan kontras lokal pada jaringan retina.</Description>
+      <Parameters>
+        <Param name="ClipLimit">2.0</Param>
+        <Param name="TileGridSize">8x8</Param>
+      </Parameters>
+    </Step>
+  </Phase>
+
+  <Phase name="SegmentationModules_Hybrid" order="2">
+    <Description>Dua modul segmentasi hibrida independen (OD dan Pembuluh Darah) dengan Deformable ResNet Encoder dan 5-Stage PixelShuffle Channel-Attention Decoder.</Description>
+    
+    <SubModule name="Hybrid_Encoder_DeformableResNet">
+      <Architecture>
+        <!-- Initial Stem -->
+        <Layer id="H-ENC-0" type="InitStem" channels="64">
+          <SubLayers>Conv2d(3, 64, kernel=7, stride=2, padding=3) -> BatchNorm2d -> ReLU -> MaxPool2d(3, stride=2, padding=1)</SubLayers>
+          <OutputResolution>128x128x64</OutputResolution>
+        </Layer>
+        <!-- Stage 1 (Deformable Bottlenecks x3) -->
+        <Layer id="H-ENC-1" type="DeformableStage1" count="3" channels="256">
+          <BlockArchitecture>1x1 Conv(in, 64) -> 3x3 DeformConv2d(64, 64) + OffsetConv -> 1x1 Conv(64, 256) + ResidualSkip</BlockArchitecture>
+          <OutputResolution>128x128x256</OutputResolution>
+        </Layer>
+        <!-- Stage 2 (Deformable Bottlenecks x4, stride=2) -->
+        <Layer id="H-ENC-2" type="DeformableStage2" count="4" channels="512">
+          <BlockArchitecture>1x1 Conv(in, 128) -> 3x3 DeformConv2d(128, 128, stride=2) + OffsetConv -> 1x1 Conv(128, 512) + ResidualSkip</BlockArchitecture>
+          <OutputResolution>64x64x512</OutputResolution>
+        </Layer>
+        <!-- Stage 3 (Deformable Bottlenecks x23/x6, stride=2) -->
+        <Layer id="H-ENC-3" type="DeformableStage3" count="23" channels="1024">
+          <BlockArchitecture>1x1 Conv(in, 256) -> 3x3 DeformConv2d(256, 256, stride=2) + OffsetConv -> 1x1 Conv(256, 1024) + ResidualSkip</BlockArchitecture>
+          <OutputResolution>32x32x1024</OutputResolution>
+        </Layer>
+        <!-- Stage 4 (Deformable Bottlenecks x3, stride=2, Deepest Bottleneck) -->
+        <Layer id="H-ENC-4" type="DeformableStage4" count="3" channels="2048">
+          <BlockArchitecture>1x1 Conv(in, 512) -> 3x3 DeformConv2d(512, 512, stride=2) + OffsetConv -> 1x1 Conv(512, 2048) + ResidualSkip</BlockArchitecture>
+          <OutputResolution>16x16x2048</OutputResolution>
+        </Layer>
+      </Architecture>
+    </SubModule>
+
+    <SubModule name="Hybrid_Decoder_PixelShuffle_Attention">
+      <Architecture>
+        <!-- Level 1 Up: 16x16 -> 32x32 -->
+        <Layer id="H-DEC-1" type="PixelShuffleStage1" in_channels="2048" out_channels="512">
+          <SubLayers>Conv2d(2048, 2048, 1) -> PixelShuffle(upscale_factor=2) [out: 32x32x512] -> Concat(skip=H-ENC-3, ch=1024) -> ChannelAttention(1536) -> Conv2d(1536, 512, 3, pad=1) -> ReLU</SubLayers>
+          <OutputResolution>32x32x512</OutputResolution>
+        </Layer>
+        <!-- Level 2 Up: 32x32 -> 64x64 -->
+        <Layer id="H-DEC-2" type="PixelShuffleStage2" in_channels="512" out_channels="256">
+          <SubLayers>Conv2d(512, 1024, 1) -> PixelShuffle(upscale_factor=2) [out: 64x64x256] -> Concat(skip=H-ENC-2, ch=512) -> ChannelAttention(768) -> Conv2d(768, 256, 3, pad=1) -> ReLU</SubLayers>
+          <OutputResolution>64x64x256</OutputResolution>
+        </Layer>
+        <!-- Level 3 Up: 64x64 -> 128x128 -->
+        <Layer id="H-DEC-3" type="PixelShuffleStage3" in_channels="256" out_channels="128">
+          <SubLayers>Conv2d(256, 512, 1) -> PixelShuffle(upscale_factor=2) [out: 128x128x128] -> Concat(skip=H-ENC-1, ch=256) -> ChannelAttention(384) -> Conv2d(384, 128, 3, pad=1) -> ReLU</SubLayers>
+          <OutputResolution>128x128x128</OutputResolution>
+        </Layer>
+        <!-- Level 4 Up: 128x128 -> 256x256 -->
+        <Layer id="H-DEC-4" type="PixelShuffleStage4" in_channels="128" out_channels="64">
+          <SubLayers>Conv2d(128, 256, 1) -> PixelShuffle(upscale_factor=2) [out: 256x256x64] -> Concat(skip=H-ENC-0-prepool, ch=64) -> ChannelAttention(128) -> Conv2d(128, 64, 3, pad=1) -> ReLU</SubLayers>
+          <OutputResolution>256x256x64</OutputResolution>
+        </Layer>
+        <!-- Level 5 Up: 256x256 -> 512x512 (Full Resolution Recovery) -->
+        <Layer id="H-DEC-5" type="PixelShuffleStage5" in_channels="64" out_channels="32">
+          <SubLayers>Conv2d(64, 128, 1) -> PixelShuffle(upscale_factor=2) [out: 512x512x32] -> ChannelAttention(32) -> Conv2d(32, 32, 3, pad=1) -> ReLU</SubLayers>
+          <OutputResolution>512x512x32</OutputResolution>
+        </Layer>
+        <!-- Output Final Conv -->
+        <Layer id="H-DEC-6" type="FinalConv" in_channels="32" out_channels="1">
+          <SubLayers>Conv2d(32, 1, kernel_size=1) -> Sigmoid()</SubLayers>
+          <OutputResolution>512x512x1</OutputResolution>
+        </Layer>
+      </Architecture>
+    </SubModule>
+
+    <LossFunction type="DiceLoss">
+      <Formula>DiceLoss = 1 - (2 * sum(p_i * g_i)) / (sum(p_i) + sum(g_i))</Formula>
+      <AlternativeLoss>BCE_Dice_Loss = BCELoss + DiceLoss</AlternativeLoss>
+    </LossFunction>
+  </Phase>
+
+  <Phase name="Post-Processing_and_Masking" order="3">
+    <Step id="POST-01" name="Binarization">
+      <Description>Mengubah probability map hasil DUNet Hibrida menjadi masker biner tegas (0 dan 1) dengan thresholding t=0.5.</Description>
+    </Step>
+    <Step id="POST-02" name="ElementwiseMultiplication">
+      <Description>Mengalikan masker biner secara piksel demi piksel dengan citra asli fundus untuk menghasilkan representasi lokal berfokus.</Description>
+      <Output_OD>I_OD = I_orig * M_OD</Output_OD>
+      <Output_Vessel>I_vessel = I_orig * M_vessel</Output_Vessel>
+    </Step>
+    <TrainingStrategy type="TwoStageTraining">
+      <Stage1>Latih modul segmentasi Hybrid DUNet hingga konvergen dengan Dice Loss pada data SMDG-19.</Stage1>
+      <Stage2>Kunci (freeze) parameter Hybrid DUNet, hasilkan masker biner I_OD dan I_vessel, lalu latih Three-Branch ResNet50 secara mandiri untuk menghindari pemutusan gradien non-diferensiabel.</Stage2>
+    </TrainingStrategy>
+  </Phase>
+
+  <Phase name="GlaucomaDetectionModule" order="4">
+    <Architecture type="ThreeBranchResNet50">
+      <Branch id="Branch-1" input="I_orig" feature="Global_Retinal_Context"/>
+      <Branch id="Branch-2" input="I_OD" feature="Local_Optic_Disc_Context"/>
+      <Branch id="Branch-3" input="I_vessel" feature="Local_Vessel_Context"/>
+    </Architecture>
+    <FusionAndClassification>
+      <Method>Average Pooling dari ketiga output cabang ResNet50</Method>
+      <Classifier>Fully Connected Layer (2 Output Classes: Normal vs Glaucoma)</Classifier>
+    </FusionAndClassification>
+    <LossFunction type="FocalLoss" ablation_planned="true">
+      <Formula>FL(p_t) = -alpha * (1 - p_t)^gamma * log(p_t)</Formula>
+      <AblationScenarios>
+        <Scenario id="SC-1" name="Baseline">Standard Cross-Entropy (gamma=0, alpha=1.0)</Scenario>
+        <Scenario id="SC-2" name="Standard_Literature">Focal Loss (gamma=2.0, alpha=N_normal/N_glaucoma empiris SMDG-19)</Scenario>
+        <Scenario id="SC-3" name="Extreme_Paper">Focal Loss acuan MultiGlaucNet (gamma=10.0, alpha=3.0)</Scenario>
+      </AblationScenarios>
+      <Purpose>Menguji pengaruh penekanan sampel mudah terhadap dataset SMDG-19.</Purpose>
+    </LossFunction>
+  </Phase>
+
+  <Phase name="EvaluationMetrics" order="5">
+    <Metrics task="Segmentation">
+      <Metric name="DiceCoefficient"/>
+      <Metric name="Accuracy"/>
+      <Metric name="F1-Score"/>
+      <Metric name="Sensitivity"/>
+      <Metric name="Specificity"/>
+    </Metrics>
+    <Metrics task="GlaucomaDetection">
+      <Metric name="Accuracy"/>
+      <Metric name="Sensitivity"/>
+      <Metric name="Specificity"/>
+      <Metric name="AUC_ROC"/>
+      <Metric name="ConfusionMatrix"/>
+    </Metrics>
+  </Phase>
+</MultiGlaucNetArchitecture>

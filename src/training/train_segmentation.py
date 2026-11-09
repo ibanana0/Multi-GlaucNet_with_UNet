@@ -22,7 +22,7 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from src.models import VanillaDUNet, HybridDUNet
-from src.losses import BCEDiceLoss, DiceLoss
+from src.losses import BCEDiceLoss, DiceLoss, TverskyLoss, FocalTverskyLoss
 from src.dataset.smdg_dataset import get_dataloaders
 from src.utils.metrics import compute_segmentation_metrics
 
@@ -124,7 +124,16 @@ def train_segmentation(
     model = model.to(device)
 
     # 3. Loss & Optimizer
-    criterion = BCEDiceLoss() if loss_type == "bce_dice" else DiceLoss()
+    if loss_type == "bce_dice":
+        criterion = BCEDiceLoss()
+    elif loss_type == "dice":
+        criterion = DiceLoss()
+    elif loss_type == "tversky":
+        criterion = TverskyLoss(alpha=0.3, beta=0.7)
+    elif loss_type == "focal_tversky":
+        criterion = FocalTverskyLoss(alpha=0.3, beta=0.7, gamma=4.0 / 3.0)
+    else:
+        raise ValueError(f"Loss type tidak dikenal: {loss_type}")
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     scheduler = CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-6)
 
@@ -228,7 +237,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=15, help="Jumlah epoch pelatihan")
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
-    parser.add_argument("--loss", choices=["bce_dice", "dice"], default="bce_dice", help="Loss function")
+    parser.add_argument("--loss", choices=["bce_dice", "dice", "tversky", "focal_tversky"], default="bce_dice", help="Loss function")
     parser.add_argument("--device", choices=["auto", "cuda", "mps", "cpu"], default="auto", help="Device target")
     parser.add_argument("--output-dir", default="checkpoints/segmentation", help="Folder simpan checkpoint")
     args = parser.parse_args()

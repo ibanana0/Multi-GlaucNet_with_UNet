@@ -35,6 +35,45 @@ class ChannelAttention(nn.Module):
         return x * y.expand_as(x)
 
 
+class SpatialAttention(nn.Module):
+    """
+    Spatial Attention Module (SAM) dari CBAM (Woo et al., 2018):
+    Mengekstrak informasi spasial inter-channel melalui pooling rata-rata (avg)
+    dan pooling maksimum (max), diikuti konvolusi 7x7 untuk menghasilkan
+    spatial attention map berbobot [0, 1] yang berfokus pada kurvatur vaskular & kontur OD.
+    """
+    def __init__(self, kernel_size: int = 7):
+        super().__init__()
+        assert kernel_size in (3, 7), "kernel_size must be 3 or 7"
+        padding = 3 if kernel_size == 7 else 1
+        self.conv = nn.Conv2d(2, 1, kernel_size=kernel_size, padding=padding, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        avg_out = torch.mean(x, dim=1, keepdim=True)
+        max_out, _ = torch.max(x, dim=1, keepdim=True)
+        scale = torch.cat([avg_out, max_out], dim=1)
+        scale = self.sigmoid(self.conv(scale))
+        return x * scale
+
+
+class CBAMBlock(nn.Module):
+    """
+    Convolutional Block Attention Module (Woo et al., 2018):
+    Menggabungkan Channel Attention Mechanism (CAM) secara berurutan
+    dengan Spatial Attention Module (SAM) untuk menyeleksi fitur anatomis optimal.
+    """
+    def __init__(self, in_channels: int, reduction: int = 16, kernel_size: int = 7):
+        super().__init__()
+        self.channel_att = ChannelAttention(in_channels, reduction=reduction)
+        self.spatial_att = SpatialAttention(kernel_size=kernel_size)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.channel_att(x)
+        x = self.spatial_att(x)
+        return x
+
+
 class DeformableBottleneck(nn.Module):
     """
     ResNet Bottleneck Block di mana konvolusi 3x3 digantikan oleh Deformable Convolution (DCNv2).
@@ -75,7 +114,7 @@ class DeformableBottleneck(nn.Module):
 class PixelShuffleUpBlock(nn.Module):
     """
     Decoder block yang memanfaatkan Sub-Pixel Convolution (PixelShuffle)
-    diikuti Concatenation dengan skip connection, Channel Attention, dan Conv-BN-ReLU.
+    diikuti Concatenation dengan skip connection, CBAM (Channel + Spatial Attention), dan Conv-BN-ReLU.
     """
     def __init__(self, in_ch: int, out_ch: int, skip_ch: int = 0):
         super().__init__()
@@ -87,7 +126,8 @@ class PixelShuffleUpBlock(nn.Module):
         self.relu_shuffle = nn.ReLU(inplace=True)
 
         total_ch = out_ch + skip_ch
-        self.attention = ChannelAttention(total_ch)
+        # CBAM Block: Channel Attention diikuti Spatial Attention
+        self.attention = CBAMBlock(total_ch)
 
         self.post_conv = nn.Sequential(
             nn.Conv2d(total_ch, out_ch, kernel_size=3, padding=1, bias=False),
@@ -107,9 +147,10 @@ class PixelShuffleUpBlock(nn.Module):
 
 class HybridDUNet(nn.Module):
     """
-    Arsitektur Hibrida (Novelty):
+    Arsitektur Hibrida Teroptimasi (Novelty):
     - Encoder: Deformable ResNet Backbone (DCNv2 Bottlenecks)
-    - Decoder: 5-Stage PixelShuffle + Channel Attention Mechanism (CAM)
+    - Decoder: 5-Stage PixelShuffle + CBAM (Channel & Spatial Attention)
+    - High-Resolution Input Skip Connection pada stage 5 (up5) untuk menjaga keutuhan kapiler mikro 1 piksel.
     - Memulihkan resolusi spasial penuh 512x512 secara eksak tanpa artefak checkerboard.
     """
     def __init__(self, in_channels: int = 3, out_classes: int = 1, backbone: str = "resnet50"):
@@ -132,7 +173,7 @@ class HybridDUNet(nn.Module):
         self.stage3 = self._make_stage(512, 1024, layers[2], stride=2)  # 32x32
         self.stage4 = self._make_stage(1024, 2048, layers[3], stride=2) # 16x16
 
-        # Decoder Stages (5-Stage PixelShuffle + Channel Attention)
+        # Decoder Stages (5-Stage PixelShuffle + CBAM)
         # Stage 1 Up: 16x16 (2048) -> 32x32 (512) + skip stage3 (1024)
         self.up1 = PixelShuffleUpBlock(in_ch=2048, out_ch=512, skip_ch=1024)
         # Stage 2 Up: 32x32 (512) -> 64x64 (256) + skip stage2 (512)
@@ -141,8 +182,8 @@ class HybridDUNet(nn.Module):
         self.up3 = PixelShuffleUpBlock(in_ch=256, out_ch=128, skip_ch=256)
         # Stage 4 Up: 128x128 (128) -> 256x256 (64) + skip pre-pool stem (64)
         self.up4 = PixelShuffleUpBlock(in_ch=128, out_ch=64, skip_ch=64)
-        # Stage 5 Up: 256x256 (64) -> 512x512 (32) (pemulihan resolusi penuh)
-        self.up5 = PixelShuffleUpBlock(in_ch=64, out_ch=32, skip_ch=0)
+        # Stage 5 Up: 256x256 (64) -> 512x512 (32) + High-Resolution Input Skip Connection (in_channels)
+        self.up5 = PixelShuffleUpBlock(in_ch=64, out_ch=32, skip_ch=in_channels)
 
         # Output Final Conv 1x1 -> Sigmoid
         self.final_conv = nn.Conv2d(32, out_classes, kernel_size=1)
@@ -161,6 +202,9 @@ class HybridDUNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Simpan tensor citra input asli untuk koneksi pintas resolusi tinggi (High-Res Skip)
+        x_input = x
+
         # Encoder
         x_prepool = self.stem_conv(x)  # 256x256, 64
         x0 = self.stem_pool(x_prepool) # 128x128, 64
@@ -169,12 +213,12 @@ class HybridDUNet(nn.Module):
         x3 = self.stage3(x2)           # 32x32, 1024
         x4 = self.stage4(x3)           # 16x16, 2048
 
-        # Decoder (5 Stages Rekonstruksi Penuh)
-        d1 = self.up1(x4, skip=x3)     # 32x32, 512
-        d2 = self.up2(d1, skip=x2)     # 64x64, 256
-        d3 = self.up3(d2, skip=x1)     # 128x128, 128
+        # Decoder (5 Stages Rekonstruksi Penuh dengan CBAM)
+        d1 = self.up1(x4, skip=x3)        # 32x32, 512
+        d2 = self.up2(d1, skip=x2)        # 64x64, 256
+        d3 = self.up3(d2, skip=x1)        # 128x128, 128
         d4 = self.up4(d3, skip=x_prepool) # 256x256, 64
-        d5 = self.up5(d4, skip=None)   # 512x512, 32
+        d5 = self.up5(d4, skip=x_input)   # 512x512, 32 (High-Resolution Input Skip Connection)
 
         logits = self.final_conv(d5)
         return torch.sigmoid(logits)

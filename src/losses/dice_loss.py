@@ -44,3 +44,44 @@ class BCEDiceLoss(nn.Module):
         loss_bce = self.bce(pred_clamped, target)
         loss_dice = self.dice(pred, target)
         return (self.bce_weight * loss_bce) + (self.dice_weight * loss_dice)
+
+
+class TverskyLoss(nn.Module):
+    """
+    Tversky Loss (Salehi et al., 2017) untuk menangani ketidakseimbangan kelas ekstrem:
+    Tversky = (TP + smooth) / (TP + alpha * FP + beta * FN + smooth)
+    Loss = 1 - Tversky
+    Dengan beta > alpha (misal alpha=0.3, beta=0.7), penalti False Negative lebih tinggi
+    sehingga model lebih agresif mendeteksi pembuluh kapiler mikro yang tipis.
+    """
+    def __init__(self, alpha: float = 0.3, beta: float = 0.7, smooth: float = 1e-6):
+        super().__init__()
+        self.alpha = alpha
+        self.beta = beta
+        self.smooth = smooth
+
+    def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        pred_flat = pred.contiguous().view(-1)
+        target_flat = target.contiguous().view(-1)
+
+        tp = (pred_flat * target_flat).sum()
+        fp = (pred_flat * (1.0 - target_flat)).sum()
+        fn = ((1.0 - pred_flat) * target_flat).sum()
+
+        tversky = (tp + self.smooth) / (tp + self.alpha * fp + self.beta * fn + self.smooth)
+        return 1.0 - tversky
+
+
+class FocalTverskyLoss(nn.Module):
+    """
+    Focal Tversky Loss (Abraham & Khan, 2019):
+    Loss = (1 - Tversky)^gamma
+    """
+    def __init__(self, alpha: float = 0.3, beta: float = 0.7, gamma: float = 4.0 / 3.0, smooth: float = 1e-6):
+        super().__init__()
+        self.tversky = TverskyLoss(alpha=alpha, beta=beta, smooth=smooth)
+        self.gamma = gamma
+
+    def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        tversky_loss = self.tversky(pred, target)
+        return torch.pow(tversky_loss, self.gamma)

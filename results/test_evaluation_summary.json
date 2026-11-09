@@ -1,0 +1,118 @@
+{
+  "segmentation": {
+    "vanilla_od": {
+      "dice": 0.9519559856444328,
+      "iou": 0.9093615158590937,
+      "accuracy": 0.9980098824751041,
+      "sensitivity": 0.9480621773860487,
+      "specificity": 0.9990901989540197,
+      "test_samples": 456
+    },
+    "hybrid_od": {
+      "dice": 0.9501053569217217,
+      "iou": 0.906138645240462,
+      "accuracy": 0.9979293137264961,
+      "sensitivity": 0.9489565667147174,
+      "specificity": 0.9990019340795429,
+      "test_samples": 456
+    },
+    "vanilla_vessel": {
+      "dice": 0.8881214161741545,
+      "iou": 0.7999934122373862,
+      "accuracy": 0.9830233982630174,
+      "sensitivity": 0.8958142657262512,
+      "specificity": 0.9899916810311703,
+      "test_samples": 70
+    },
+    "hybrid_vessel": {
+      "dice": 0.8449202148023142,
+      "iou": 0.7325812165682819,
+      "accuracy": 0.9757275172641345,
+      "sensitivity": 0.87457550387318,
+      "specificity": 0.9838807189222966,
+      "test_samples": 70
+    }
+  },
+  "detection": {
+    "Vanilla_Scenario1_CE": {
+      "accuracy": 0.9155844155348709,
+      "sensitivity": 0.9552447551111546,
+      "specificity": 0.8905560458172501,
+      "precision": 0.8463444856448148,
+      "f1_score": 0.897503235215873,
+      "auc_roc": 0.980960257747548,
+      "youden_optimal_threshold": 0.6386175155639648,
+      "youden_j_score": 0.8780093692715052,
+      "confusion_matrix": [
+        [
+          1009,
+          124
+        ],
+        [
+          32,
+          683
+        ]
+      ]
+    },
+    "Vanilla_Scenario2_StdFocal": {
+      "accuracy": 0.9182900432403522,
+      "sensitivity": 0.9104895103621693,
+      "specificity": 0.9232127095389926,
+      "precision": 0.8821138210186839,
+      "f1_score": 0.8960770317887077,
+      "auc_roc": 0.9742190730716768,
+      "youden_optimal_threshold": 0.5034100413322449,
+      "youden_j_score": 0.8367166813768755,
+      "confusion_matrix": [
+        [
+          1046,
+          87
+        ],
+        [
+          64,
+          651
+        ]
+      ]
+    },
+    "Vanilla_Scenario3_ExtremeFocal": {
+      "accuracy": 0.909632034582812,
+      "sensitivity": 0.9482517481191257,
+      "specificity": 0.8852603706191297,
+      "precision": 0.839108910787239,
+      "f1_score": 0.8903479474431261,
+      "auc_roc": 0.980117146754393,
+      "youden_optimal_threshold": 0.5864885449409485,
+      "youden_j_score": 0.8704053228325074,
+      "confusion_matrix": [
+        [
+          1003,
+          130
+        ],
+        [
+          37,
+          678
+        ]
+      ]
+    },
+    "Hybrid_Scenario2_Proposed": {
+      "accuracy": 0.9117965367471971,
+      "sensitivity": 0.9384615383302851,
+      "specificity": 0.8949691084823505,
+      "precision": 0.8493670885000801,
+      "f1_score": 0.8916943021651446,
+      "auc_roc": 0.9773113029953278,
+      "youden_optimal_threshold": 0.5630800724029541,
+      "youden_j_score": 0.8518840382918053,
+      "confusion_matrix": [
+        [
+          1014,
+          119
+        ],
+        [
+          44,
+          671
+        ]
+      ]
+    }
+  }
+}

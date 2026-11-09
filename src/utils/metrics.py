@@ -55,15 +55,18 @@ def compute_segmentation_metrics(pred: torch.Tensor, target: torch.Tensor, thres
         }
 
 
-def compute_classification_metrics(probs: np.ndarray, targets: np.ndarray, threshold: float = 0.5) -> dict:
+def compute_classification_metrics(probs: np.ndarray, targets: np.ndarray, threshold: float = 0.5, return_roc_curve: bool = False) -> dict:
     """
     Menghitung metrik deteksi glaukoma biner (Normal vs Glaucoma):
     - Accuracy
     - Sensitivity (Recall)
     - Specificity
     - Precision
+    - F1-Score (Harmonic mean dari Precision & Sensitivity)
     - AUC-ROC
+    - Youden's J Statistic (Titik potong optimal)
     - Confusion Matrix
+    - (Opsional) ROC Curve coordinates (fpr, tpr, thresholds)
     """
     preds = (probs >= threshold).astype(int)
     cm = confusion_matrix(targets, preds, labels=[0, 1])
@@ -76,18 +79,48 @@ def compute_classification_metrics(probs: np.ndarray, targets: np.ndarray, thres
     sensitivity = tp / (tp + fn + eps)
     specificity = tn / (tn + fp + eps)
     precision = tp / (tp + fp + eps)
+    f1 = (2.0 * precision * sensitivity) / (precision + sensitivity + eps)
 
-    # AUC-ROC
+    # AUC-ROC dan koordinat Kurva ROC
+    fpr_list, tpr_list, thresholds_list = [], [], []
+    optimal_threshold = threshold
+    optimal_j = 0.0
+
     try:
+        from sklearn.metrics import roc_curve
         auc = roc_auc_score(targets, probs)
+        fpr, tpr, threshs = roc_curve(targets, probs)
+        
+        # Hitung Youden's J Statistic: J = Sensitivity + Specificity - 1 = TPR - FPR
+        j_scores = tpr - fpr
+        best_idx = np.argmax(j_scores)
+        optimal_threshold = float(threshs[best_idx])
+        optimal_j = float(j_scores[best_idx])
+        
+        if return_roc_curve:
+            fpr_list = fpr.tolist()
+            tpr_list = tpr.tolist()
+            thresholds_list = threshs.tolist()
     except Exception:
         auc = 0.5  # Jika hanya terdapat satu kelas pada batch kecil
 
-    return {
+    result = {
         "accuracy": float(accuracy),
         "sensitivity": float(sensitivity),
         "specificity": float(specificity),
         "precision": float(precision),
+        "f1_score": float(f1),
         "auc_roc": float(auc),
+        "youden_optimal_threshold": float(optimal_threshold),
+        "youden_j_score": float(optimal_j),
         "confusion_matrix": cm.tolist()
     }
+
+    if return_roc_curve:
+        result["roc_curve"] = {
+            "fpr": fpr_list,
+            "tpr": tpr_list,
+            "thresholds": thresholds_list
+        }
+
+    return result

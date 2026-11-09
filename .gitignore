@@ -35,3 +35,5 @@ kaggle.json
 # Results / logs
 results/*.png
 results/visualizations/*.png
+
+checkpoints

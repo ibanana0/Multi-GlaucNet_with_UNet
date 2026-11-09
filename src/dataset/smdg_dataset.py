@@ -19,19 +19,56 @@ class SMDGDataset(Dataset):
     """Dataset class untuk memuat citra fundus, masker OD, masker vaskular, dan label glaukoma."""
 
     def __init__(self, df: pd.DataFrame, root_dir: str, preprocessor: Optional[RetinalPreprocessor] = None, transform=None):
-        self.df = df.reset_index(drop=True)
+        self.df = df.reset_index(drop=True).copy()
         self.root_dir = Path(root_dir)
         self.preprocessor = preprocessor if preprocessor is not None else RetinalPreprocessor()
         self.transform = transform
+
+        # Standarisasi kolom metadata otomatis (kompatibel SMDG-19 asli & sintetis)
+        column_mapping = {
+            "fundus": "fundus_path",
+            "fundus_od_seg": "od_mask_path",
+            "bv_seg": "vessel_mask_path",
+            "types": "glaucoma_label",
+            "names": "image_id"
+        }
+        for old_col, new_col in column_mapping.items():
+            if old_col in self.df.columns and new_col not in self.df.columns:
+                self.df[new_col] = self.df[old_col]
 
     def __len__(self) -> int:
         return len(self.df)
 
     def _resolve_path(self, rel_or_abs: str) -> Path:
-        p = Path(rel_or_abs)
-        if p.is_absolute():
-            return p
-        return self.root_dir / p
+        """
+        Menyelesaikan path berkas citra/masker dengan resolusi adaptif:
+        Mendukung path langsung, path dengan leading slash, dan struktur folder bersarang Kaggle
+        (contoh: full-fundus/full-fundus/citra.png).
+        """
+        s = str(rel_or_abs).strip().lstrip("/\\")
+        p = Path(s)
+
+        # 1. Cek langsung di root_dir / p
+        direct_path = self.root_dir / p
+        if direct_path.exists():
+            return direct_path
+
+        # 2. Cek di struktur nested Kaggle: root_dir / folder / folder / filename
+        parts = p.parts
+        if len(parts) >= 2:
+            nested_path = self.root_dir / parts[0] / parts[0] / Path(*parts[1:])
+            if nested_path.exists():
+                return nested_path
+
+        # 3. Cek pencarian nama file di dalam subfolder parent
+        if p.name:
+            parent_tag = parts[0] if len(parts) >= 1 else ""
+            if parent_tag:
+                alt_path = self.root_dir / parent_tag / parent_tag / p.name
+                if alt_path.exists():
+                    return alt_path
+
+        return direct_path
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         row = self.df.iloc[idx]
@@ -89,32 +126,77 @@ class SMDGDataset(Dataset):
         }
 
 
-def get_dataloaders(csv_path: str, root_dir: str, batch_size: int = 4, train_ratio: float = 0.70, val_ratio: float = 0.15, random_seed: int = 42) -> Tuple[DataLoader, DataLoader, DataLoader, pd.DataFrame]:
+def get_dataloaders(
+    csv_path: str,
+    root_dir: str,
+    batch_size: int = 4,
+    train_ratio: float = 0.70,
+    val_ratio: float = 0.15,
+    random_seed: int = 42,
+    target_filter: Optional[str] = None
+) -> Tuple[DataLoader, DataLoader, DataLoader, pd.DataFrame]:
     """
     Membuat DataLoader untuk Train, Val, dan Test set dengan Stratified Split.
+    
+    Args:
+        target_filter: Opsi filter sparsitas data ("od", "vessel", atau None).
+                       Jika "od", menyaring hanya baris dengan masker OD valid.
+                       Jika "vessel", menyaring hanya baris dengan masker pembuluh darah valid
+                       (krusial untuk mencegah Zero-Prediction Collapse pada SMDG-19).
     """
     df = pd.read_csv(csv_path)
 
-    # Filter data jika ada label NaN
+    # Standarisasi kolom metadata otomatis (kompatibel SMDG-19 asli & format standar)
+    column_mapping = {
+        "fundus": "fundus_path",
+        "fundus_od_seg": "od_mask_path",
+        "bv_seg": "vessel_mask_path",
+        "types": "glaucoma_label",
+        "names": "image_id"
+    }
+    for old_col, new_col in column_mapping.items():
+        if old_col in df.columns and new_col not in df.columns:
+            df[new_col] = df[old_col]
+
+    # Filter data jika ada label NaN pada tugas klasifikasi
     if "glaucoma_label" in df.columns:
         df = df[df["glaucoma_label"].isin([0, 1])].copy()
 
+    # Terapkan Target Filter (Sparsity Guard) jika ditentukan
+    if target_filter is not None:
+        tgt = target_filter.lower().strip()
+        if tgt == "od" and "od_mask_path" in df.columns:
+            valid_mask = df["od_mask_path"].notna() & (df["od_mask_path"].astype(str).str.strip() != "")
+            df = df[valid_mask].copy()
+            print(f"🛡️ [Sparsity Guard] Filter OD aktif: menyaring {len(df)} sampel dengan masker Optic Disc valid.")
+        elif tgt == "vessel" and "vessel_mask_path" in df.columns:
+            valid_mask = df["vessel_mask_path"].notna() & (df["vessel_mask_path"].astype(str).str.strip() != "")
+            df = df[valid_mask].copy()
+            print(f"🛡️ [Sparsity Guard] Filter Vessel aktif: menyaring {len(df)} sampel dengan masker Pembuluh Darah valid.")
+
+    if len(df) == 0:
+        raise ValueError(f"Dataset kosong setelah penerapan filter '{target_filter}'. Periksa kembali berkas {csv_path}!")
+
     # Stratified Split: Train vs Temp (Val + Test)
     temp_ratio = 1.0 - train_ratio
+    stratify_col = df["glaucoma_label"] if ("glaucoma_label" in df.columns and df["glaucoma_label"].nunique() > 1) else None
+
     train_df, temp_df = train_test_split(
         df,
         test_size=temp_ratio,
         random_state=random_seed,
-        stratify=df["glaucoma_label"] if "glaucoma_label" in df.columns else None
+        stratify=stratify_col
     )
 
     # Split Temp menjadi Val dan Test
     val_rel_ratio = val_ratio / temp_ratio
+    stratify_temp = temp_df["glaucoma_label"] if ("glaucoma_label" in temp_df.columns and temp_df["glaucoma_label"].nunique() > 1) else None
+
     val_df, test_df = train_test_split(
         temp_df,
         test_size=(1.0 - val_rel_ratio),
         random_state=random_seed,
-        stratify=temp_df["glaucoma_label"] if "glaucoma_label" in temp_df.columns else None
+        stratify=stratify_temp
     )
 
     train_ds = SMDGDataset(train_df, root_dir=root_dir)

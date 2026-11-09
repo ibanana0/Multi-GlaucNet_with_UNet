@@ -9,19 +9,29 @@ according to MultiGlaucNet architecture:
 
 import torch
 import torch.nn as nn
+import torchvision.transforms as T
 from torchvision.models import resnet50, ResNet50_Weights
 
 
 class ThreeBranchResNet50(nn.Module):
     """
     Tiga cabang ResNet50 independen untuk memproses:
-    1. Konteks global retina
-    2. Konteks lokal Optic Disc (OD)
-    3. Konteks lokal jaringan pembuluh darah
+    1. Konteks global retina (I_orig)
+    2. Konteks lokal Optic Disc (I_OD = I_orig * M_OD)
+    3. Konteks lokal jaringan pembuluh darah (I_vessel = I_orig * M_vessel)
+    
+    Args:
+        apply_imagenet_norm: Jika True, menerapkan normalisasi ImageNet (z-score) pada input.
+                             Default False untuk menjaga kompatibilitas 100% dengan checkpoint
+                             eksisting yang dilatih pada skala [0, 1].
     """
-    def __init__(self, num_classes: int = 2, pretrained: bool = True, fusion_method: str = "average"):
+    def __init__(self, num_classes: int = 2, pretrained: bool = True, fusion_method: str = "average", apply_imagenet_norm: bool = False):
         super().__init__()
         self.fusion_method = fusion_method.lower()
+        self.apply_imagenet_norm = apply_imagenet_norm
+
+        if self.apply_imagenet_norm:
+            self.normalize = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
         weights = ResNet50_Weights.DEFAULT if pretrained else None
 
@@ -48,9 +58,13 @@ class ThreeBranchResNet50(nn.Module):
         )
 
     def extract_features(self, I_orig: torch.Tensor, I_od: torch.Tensor, I_vessel: torch.Tensor):
-        f_orig = self.branch_orig(I_orig)      # [B, 2048]
-        f_od = self.branch_od(I_od)            # [B, 2048]
-        f_vessel = self.branch_vessel(I_vessel) # [B, 2048]
+        x_orig = self.normalize(I_orig) if self.apply_imagenet_norm else I_orig
+        x_od = self.normalize(I_od) if self.apply_imagenet_norm else I_od
+        x_vessel = self.normalize(I_vessel) if self.apply_imagenet_norm else I_vessel
+
+        f_orig = self.branch_orig(x_orig)      # [B, 2048]
+        f_od = self.branch_od(x_od)            # [B, 2048]
+        f_vessel = self.branch_vessel(x_vessel) # [B, 2048]
         return f_orig, f_od, f_vessel
 
     def forward(self, I_orig: torch.Tensor, I_od: torch.Tensor, I_vessel: torch.Tensor) -> torch.Tensor:

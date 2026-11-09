@@ -155,6 +155,7 @@ def train_detection(
     batch_size: int = 4,
     lr: float = 5e-5,
     pretrained: bool = True,
+    apply_imagenet_norm: bool = False,
     device_pref: str = "auto",
     output_dir: str = "checkpoints/detection"
 ):
@@ -195,7 +196,12 @@ def train_detection(
     model_od, model_vessel = load_segmentation_models(variant, seg_dir, device)
 
     # 4. Inisialisasi Detektor
-    detector = ThreeBranchResNet50(num_classes=2, pretrained=pretrained, fusion_method="average").to(device)
+    detector = ThreeBranchResNet50(
+        num_classes=2,
+        pretrained=pretrained,
+        fusion_method="average",
+        apply_imagenet_norm=apply_imagenet_norm
+    ).to(device)
 
     # 5. Loss & Optimizer
     criterion = FocalLoss(alpha=alpha, gamma=gamma)
@@ -256,24 +262,54 @@ def train_detection(
     with open(log_path, "w") as f:
         json.dump(history, f, indent=2)
 
+    # 7. Evaluasi Independen pada Test Set menggunakan Checkpoint Terbaik
+    print(f"\n🔍 Menjalankan Evaluasi Independen pada Test Set...")
+    best_checkpoint = torch.load(best_ckpt, map_location=device)
+    detector.load_state_dict(best_checkpoint["model_state_dict"])
+    test_metrics = validate_detector(detector, model_od, model_vessel, test_loader, criterion, device)
+
+    test_log_path = output_path / f"test_metrics_{tag}.json"
+    with open(test_log_path, "w") as f:
+        json.dump(test_metrics, f, indent=2)
+
     print(f"\n✅ Pelatihan {tag.upper()} Selesai!")
-    print(f"   Best Val AUC   : {best_auc:.4f}")
-    print(f"   Checkpoint Path: {best_ckpt}")
-    print(f"   History Log    : {log_path}\n")
+    print(f"   Best Val AUC     : {best_auc:.4f}")
+    print(f"   Test Set AUC     : {test_metrics['auc_roc']:.4f}")
+    print(f"   Test Set Accuracy: {test_metrics['accuracy']:.4f}")
+    print(f"   Test Set F1-Score: {test_metrics['f1_score']:.4f}")
+    print(f"   Test Sensitivity : {test_metrics['sensitivity']:.4f}")
+    print(f"   Test Specificity : {test_metrics['specificity']:.4f}")
+    print(f"   Checkpoint Path  : {best_ckpt}")
+    print(f"   History Log      : {log_path}")
+    print(f"   Test Metrics Log : {test_log_path}\n")
 
     return best_ckpt, history
 
 
+def find_default_dataset_paths() -> tuple:
+    candidates = [
+        (PROJECT_ROOT.parent / "dataset" / "metadata - standardized.csv", PROJECT_ROOT.parent / "dataset"),
+        (PROJECT_ROOT / "dataset" / "metadata - standardized.csv", PROJECT_ROOT / "dataset"),
+        (PROJECT_ROOT / "data/raw/smdg-19/metadata_smdg19.csv", PROJECT_ROOT / "data/raw/smdg-19"),
+    ]
+    for csv_c, root_c in candidates:
+        if csv_c.exists():
+            return str(csv_c), str(root_c)
+    return str(candidates[0][0]), str(candidates[0][1])
+
+
 def main():
+    default_csv, default_root = find_default_dataset_paths()
     parser = argparse.ArgumentParser(description="MultiGlaucNet Stage 2: Glaucoma Detection Training")
     parser.add_argument("--variant", choices=["vanilla", "hybrid"], default="vanilla")
     parser.add_argument("--scenario", type=int, choices=[1, 2, 3], default=1, help="Skenario Loss: 1 (CE), 2 (Std Focal), 3 (Extreme)")
-    parser.add_argument("--csv-path", default="data/raw/smdg-19/metadata_smdg19.csv")
-    parser.add_argument("--root-dir", default="data/raw/smdg-19")
+    parser.add_argument("--csv-path", default=default_csv)
+    parser.add_argument("--root-dir", default=default_root)
     parser.add_argument("--seg-dir", default="checkpoints/segmentation")
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--lr", type=float, default=5e-5)
+    parser.add_argument("--apply-imagenet-norm", action="store_true", help="Aktifkan normalisasi ImageNet z-score")
     parser.add_argument("--device", choices=["auto", "cuda", "mps", "cpu"], default="auto")
     parser.add_argument("--output-dir", default="checkpoints/detection")
     args = parser.parse_args()
@@ -287,6 +323,7 @@ def main():
         epochs=args.epochs,
         batch_size=args.batch_size,
         lr=args.lr,
+        apply_imagenet_norm=args.apply_imagenet_norm,
         device_pref=args.device,
         output_dir=args.output_dir
     )

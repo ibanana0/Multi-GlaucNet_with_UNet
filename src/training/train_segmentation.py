@@ -104,12 +104,13 @@ def train_segmentation(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    # 1. Siapkan Dataloader
+    # 1. Siapkan Dataloader dengan Target Filter (Sparsity Guard)
     target_key = "od_mask" if target == "od" else "vessel_mask"
     train_loader, val_loader, test_loader, _ = get_dataloaders(
         csv_path=csv_path,
         root_dir=root_dir,
-        batch_size=batch_size
+        batch_size=batch_size,
+        target_filter=target
     )
 
     # 2. Inisialisasi Model
@@ -181,20 +182,49 @@ def train_segmentation(
     with open(log_path, "w") as f:
         json.dump(history, f, indent=2)
 
+    # 5. Evaluasi Independen pada Test Set menggunakan Checkpoint Terbaik
+    print(f"\n🔍 Menjalankan Evaluasi Independen pada Test Set...")
+    best_checkpoint = torch.load(best_ckpt_path, map_location=device)
+    model.load_state_dict(best_checkpoint["model_state_dict"])
+    test_metrics = validate(model, test_loader, criterion, target_key, device)
+
+    test_log_path = output_path / f"test_metrics_{model_tag}.json"
+    with open(test_log_path, "w") as f:
+        json.dump(test_metrics, f, indent=2)
+
     print(f"\n✅ Pelatihan {model_tag.upper()} Selesai!")
-    print(f"   Best Val Dice  : {best_dice:.4f}")
-    print(f"   Checkpoint Path: {best_ckpt_path}")
-    print(f"   History Log    : {log_path}\n")
+    print(f"   Best Val Dice    : {best_dice:.4f}")
+    print(f"   Test Set Dice    : {test_metrics['dice']:.4f}")
+    print(f"   Test Set IoU     : {test_metrics['iou']:.4f}")
+    print(f"   Test Sensitivity : {test_metrics['sensitivity']:.4f}")
+    print(f"   Test Specificity : {test_metrics['specificity']:.4f}")
+    print(f"   Test Accuracy    : {test_metrics['accuracy']:.4f}")
+    print(f"   Checkpoint Path  : {best_ckpt_path}")
+    print(f"   History Log      : {log_path}")
+    print(f"   Test Metrics Log : {test_log_path}\n")
 
     return best_ckpt_path, history
 
 
+def find_default_dataset_paths() -> tuple:
+    candidates = [
+        (PROJECT_ROOT.parent / "dataset" / "metadata - standardized.csv", PROJECT_ROOT.parent / "dataset"),
+        (PROJECT_ROOT / "dataset" / "metadata - standardized.csv", PROJECT_ROOT / "dataset"),
+        (PROJECT_ROOT / "data/raw/smdg-19/metadata_smdg19.csv", PROJECT_ROOT / "data/raw/smdg-19"),
+    ]
+    for csv_c, root_c in candidates:
+        if csv_c.exists():
+            return str(csv_c), str(root_c)
+    return str(candidates[0][0]), str(candidates[0][1])
+
+
 def main():
+    default_csv, default_root = find_default_dataset_paths()
     parser = argparse.ArgumentParser(description="MultiGlaucNet Stage 1: Segmentation Training")
     parser.add_argument("--variant", choices=["vanilla", "hybrid"], default="vanilla", help="Model variant: vanilla atau hybrid")
     parser.add_argument("--target", choices=["od", "vessel", "both"], default="od", help="Target organ: od, vessel, atau both")
-    parser.add_argument("--csv-path", default="data/raw/smdg-19/metadata_smdg19.csv", help="Path ke file CSV metadata")
-    parser.add_argument("--root-dir", default="data/raw/smdg-19", help="Root direktori citra")
+    parser.add_argument("--csv-path", default=default_csv, help="Path ke file CSV metadata")
+    parser.add_argument("--root-dir", default=default_root, help="Root direktori citra")
     parser.add_argument("--epochs", type=int, default=15, help="Jumlah epoch pelatihan")
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")

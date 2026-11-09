@@ -10,6 +10,11 @@ set -e  # Hentikan eksekusi jika terjadi error
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Aktifkan virtual environment jika ada
+if [ -f "/root/venv/bin/activate" ]; then
+    source /root/venv/bin/activate
+fi
+
 echo "========================================================================"
 echo "🖥️ MEMULAI EKSPERIMEN MULTIGLAUCNET (MODE CPU)"
 echo "Waktu Mulai: $(date)"

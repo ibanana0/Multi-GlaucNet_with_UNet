@@ -287,7 +287,9 @@ def main():
         ("Vanilla_Scenario1_CE", det_dir / "best_detector_vanilla_sc1.pth", "vanilla", "#2ca02c", "--"),
         ("Vanilla_Scenario2_StdFocal", det_dir / "best_detector_vanilla_sc2.pth", "vanilla", "#1f77b4", "-."),
         ("Vanilla_Scenario3_ExtremeFocal", det_dir / "best_detector_vanilla_sc3.pth", "vanilla", "#ff7f0e", ":"),
+        ("Hybrid_Scenario1_CE", det_dir / "best_detector_hybrid_sc1.pth", "hybrid", "#9467bd", "--"),
         ("Hybrid_Scenario2_Proposed", det_dir / "best_detector_hybrid_sc2.pth", "hybrid", "#d62728", "-"),
+        ("Hybrid_Scenario3_ExtremeFocal", det_dir / "best_detector_hybrid_sc3.pth", "hybrid", "#8c564b", ":"),
     ]
 
     roc_plot_dict = {}

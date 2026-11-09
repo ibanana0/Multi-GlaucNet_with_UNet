@@ -223,6 +223,7 @@ def evaluate_detector_model(
 def find_default_dataset_paths() -> tuple:
     """Mencari lokasi dataset SMDG-19 yang tersedia secara otomatis."""
     candidates = [
+        (PROJECT_ROOT.parent / "dataset" / "smdg-19" / "archive" / "metadata - standardized.csv", PROJECT_ROOT.parent / "dataset" / "smdg-19" / "archive"),
         (PROJECT_ROOT.parent / "dataset" / "metadata - standardized.csv", PROJECT_ROOT.parent / "dataset"),
         (PROJECT_ROOT / "dataset" / "metadata - standardized.csv", PROJECT_ROOT / "dataset"),
         (PROJECT_ROOT / "data/raw/smdg-19/metadata_smdg19.csv", PROJECT_ROOT / "data/raw/smdg-19"),

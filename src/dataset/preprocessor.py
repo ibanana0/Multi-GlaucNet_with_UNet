@@ -38,9 +38,9 @@ class RetinalPreprocessor:
         h, w = gray.shape
         pad = 5
         rmin = max(0, rmin - pad)
-        rmax = min(h, rmax + pad)
+        rmax = min(h, rmax + pad + 1)
         cmin = max(0, cmin - pad)
-        cmax = min(w, cmax + pad)
+        cmax = min(w, cmax + pad + 1)
 
         cropped_img = image[rmin:rmax, cmin:cmax]
 
@@ -49,6 +49,9 @@ class RetinalPreprocessor:
             cropped_masks = {}
             for k, m in masks.items():
                 if m is not None:
+                    # Pastikan dimensi masker selaras dengan citra sebelum di-crop
+                    if m.shape[:2] != (h, w):
+                        m = cv2.resize(m, (w, h), interpolation=cv2.INTER_NEAREST)
                     cropped_masks[k] = m[rmin:rmax, cmin:cmax]
                 else:
                     cropped_masks[k] = None

@@ -177,27 +177,42 @@ def get_dataloaders(
     if len(df) == 0:
         raise ValueError(f"Dataset kosong setelah penerapan filter '{target_filter}'. Periksa kembali berkas {csv_path}!")
 
-    # Stratified Split: Train vs Temp (Val + Test)
-    temp_ratio = 1.0 - train_ratio
-    stratify_col = df["glaucoma_label"] if ("glaucoma_label" in df.columns and df["glaucoma_label"].nunique() > 1) else None
+    if len(df) < 10:
+        n_train = max(1, int(len(df) * train_ratio))
+        train_df = df.iloc[:n_train].copy()
+        rem_df = df.iloc[n_train:].copy()
+        if len(rem_df) >= 2:
+            mid = len(rem_df) // 2
+            val_df = rem_df.iloc[:mid].copy()
+            test_df = rem_df.iloc[mid:].copy()
+        elif len(rem_df) == 1:
+            val_df = rem_df.copy()
+            test_df = rem_df.copy()
+        else:
+            val_df = train_df.copy()
+            test_df = train_df.copy()
+    else:
+        # Stratified Split: Train vs Temp (Val + Test)
+        temp_ratio = 1.0 - train_ratio
+        stratify_col = df["glaucoma_label"] if ("glaucoma_label" in df.columns and df["glaucoma_label"].nunique() > 1) else None
 
-    train_df, temp_df = train_test_split(
-        df,
-        test_size=temp_ratio,
-        random_state=random_seed,
-        stratify=stratify_col
-    )
+        train_df, temp_df = train_test_split(
+            df,
+            test_size=temp_ratio,
+            random_state=random_seed,
+            stratify=stratify_col
+        )
 
-    # Split Temp menjadi Val dan Test
-    val_rel_ratio = val_ratio / temp_ratio
-    stratify_temp = temp_df["glaucoma_label"] if ("glaucoma_label" in temp_df.columns and temp_df["glaucoma_label"].nunique() > 1) else None
+        # Split Temp menjadi Val dan Test
+        val_rel_ratio = min(max(val_ratio / temp_ratio, 0.1), 0.9)
+        stratify_temp = temp_df["glaucoma_label"] if ("glaucoma_label" in temp_df.columns and temp_df["glaucoma_label"].nunique() > 1) else None
 
-    val_df, test_df = train_test_split(
-        temp_df,
-        test_size=(1.0 - val_rel_ratio),
-        random_state=random_seed,
-        stratify=stratify_temp
-    )
+        val_df, test_df = train_test_split(
+            temp_df,
+            test_size=(1.0 - val_rel_ratio),
+            random_state=random_seed,
+            stratify=stratify_temp
+        )
 
     train_ds = SMDGDataset(train_df, root_dir=root_dir)
     val_ds = SMDGDataset(val_df, root_dir=root_dir)

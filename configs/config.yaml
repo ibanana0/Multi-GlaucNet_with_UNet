@@ -4,8 +4,8 @@ random_seed: 42
 
 # Pengaturan Path Dataset SMDG-19 ## sesuaikan dengan kondisi path dataset di komputer mu
 data:
-  raw_dir: "../dataset"
-  metadata_csv: "../dataset/metadata - standardized.csv"
+  raw_dir: "../dataset/smdg-19/archive"
+  metadata_csv: "../dataset/smdg-19/archive/metadata - standardized.csv"
   kaggle_dataset_slug: "deathtrooper/multichannel-glaucoma-benchmark-dataset"
   target_resolution: [512, 512]
   clahe:

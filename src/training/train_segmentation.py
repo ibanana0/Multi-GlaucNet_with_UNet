@@ -208,6 +208,7 @@ def train_segmentation(
 
 def find_default_dataset_paths() -> tuple:
     candidates = [
+        (PROJECT_ROOT.parent / "dataset" / "smdg-19" / "archive" / "metadata - standardized.csv", PROJECT_ROOT.parent / "dataset" / "smdg-19" / "archive"),
         (PROJECT_ROOT.parent / "dataset" / "metadata - standardized.csv", PROJECT_ROOT.parent / "dataset"),
         (PROJECT_ROOT / "dataset" / "metadata - standardized.csv", PROJECT_ROOT / "dataset"),
         (PROJECT_ROOT / "data/raw/smdg-19/metadata_smdg19.csv", PROJECT_ROOT / "data/raw/smdg-19"),

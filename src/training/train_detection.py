@@ -37,11 +37,27 @@ def get_device(preferred: str = "auto") -> torch.device:
     return torch.device("cpu")
 
 
-def load_segmentation_models(variant: str, seg_dir: str, device: torch.device):
+def load_segmentation_models(variant: str, seg_dir: str, device: torch.device, subset: str = "all"):
     """Memuat checkpoint modul segmentasi OD dan Pembuluh Darah lalu membekukan parameternya."""
     seg_path = Path(seg_dir)
-    od_ckpt = seg_path / f"best_{variant}_od.pth"
-    vessel_ckpt = seg_path / f"best_{variant}_vessel.pth"
+    
+    # Cari checkpoint OD adaptif (cek subset spesifik dulu, lalu fallback ke general)
+    od_candidates = [
+        seg_path / f"best_{variant}_od_{subset.lower()}.pth",
+        seg_path / f"best_{variant}_od.pth",
+        seg_path.parent / "segmentation" / f"best_{variant}_od.pth",
+        seg_path.parent / "full" / f"best_{variant}_od.pth",
+    ]
+    od_ckpt = next((c for c in od_candidates if c.exists()), seg_path / f"best_{variant}_od.pth")
+
+    # Cari checkpoint Vessel adaptif
+    vessel_candidates = [
+        seg_path / f"best_{variant}_vessel_{subset.lower()}.pth",
+        seg_path / f"best_{variant}_vessel.pth",
+        seg_path.parent / "segmentation" / f"best_{variant}_vessel.pth",
+        seg_path.parent / "full" / f"best_{variant}_vessel.pth",
+    ]
+    vessel_ckpt = next((c for c in vessel_candidates if c.exists()), seg_path / f"best_{variant}_vessel.pth")
 
     if variant == "vanilla":
         model_od = VanillaDUNet(in_channels=3, out_classes=1)
@@ -157,7 +173,8 @@ def train_detection(
     pretrained: bool = True,
     apply_imagenet_norm: bool = False,
     device_pref: str = "auto",
-    output_dir: str = "checkpoints/detection"
+    output_dir: str = "checkpoints/detection",
+    subset: str = "all"
 ):
     device = get_device(device_pref)
     output_path = Path(output_dir)
@@ -171,7 +188,7 @@ def train_detection(
         sc_name = "Scenario2_Standard_Focal"
         gamma = 2.0
         # Hitung rasio empiris dari dataset
-        df_temp = get_dataloaders(csv_path, root_dir, batch_size=batch_size)[3]
+        df_temp = get_dataloaders(csv_path, root_dir, batch_size=batch_size, subset=subset if subset.lower() != "all" else None)[3]
         n_norm = sum(df_temp["glaucoma_label"] == 0)
         n_glauc = max(sum(df_temp["glaucoma_label"] == 1), 1)
         alpha = float(n_norm) / float(n_glauc)
@@ -181,19 +198,27 @@ def train_detection(
     else:
         raise ValueError(f"Skenario tidak valid: {scenario}. Pilih 1, 2, atau 3.")
 
+    sub_suffix = f"_{subset.lower()}" if subset.lower() != "all" else ""
     alpha_str = f"{alpha:.2f}" if isinstance(alpha, (int, float)) else str(alpha)
+    tag = f"{variant}_sc{scenario}_{sc_name}{sub_suffix}"
     print(f"\n🚀 Menjalankan Pelatihan Deteksi Glaukoma:")
     print(f"   - Segmenter Variant : {variant.upper()}")
+    print(f"   - Subset Filter     : {subset.upper()}")
     print(f"   - Ablation Scenario : {sc_name}")
     print(f"   - Focal Loss Config : gamma={gamma}, alpha={alpha_str}")
     print(f"   - Device            : {device}")
     print(f"   - Epochs            : {epochs} | Batch Size: {batch_size} | LR: {lr}")
 
     # 2. Muat Data
-    train_loader, val_loader, test_loader, _ = get_dataloaders(csv_path, root_dir, batch_size=batch_size)
+    train_loader, val_loader, test_loader, _ = get_dataloaders(
+        csv_path,
+        root_dir,
+        batch_size=batch_size,
+        subset=subset if subset.lower() != "all" else None
+    )
 
     # 3. Muat Modul Segmentasi Beku
-    model_od, model_vessel = load_segmentation_models(variant, seg_dir, device)
+    model_od, model_vessel = load_segmentation_models(variant, seg_dir, device, subset=subset)
 
     # 4. Inisialisasi Detektor
     detector = ThreeBranchResNet50(
@@ -211,7 +236,8 @@ def train_detection(
     # 6. Training Loop
     best_auc = -1.0
     history = []
-    tag = f"detector_{variant}_sc{scenario}"
+    sub_suffix = f"_{subset.lower()}" if subset.lower() != "all" else ""
+    tag = f"detector_{variant}_sc{scenario}{sub_suffix}"
     best_ckpt = output_path / f"best_{tag}.pth"
 
     for epoch in range(1, epochs + 1):
@@ -313,6 +339,7 @@ def main():
     parser.add_argument("--apply-imagenet-norm", action="store_true", help="Aktifkan normalisasi ImageNet z-score")
     parser.add_argument("--device", choices=["auto", "cuda", "mps", "cpu"], default="auto")
     parser.add_argument("--output-dir", default="checkpoints/detection")
+    parser.add_argument("--subset", default="all", help="Subset dataset untuk Head-to-Head (contoh: refuge, all)")
     args = parser.parse_args()
 
     train_detection(
@@ -326,7 +353,8 @@ def main():
         lr=args.lr,
         apply_imagenet_norm=args.apply_imagenet_norm,
         device_pref=args.device,
-        output_dir=args.output_dir
+        output_dir=args.output_dir,
+        subset=args.subset
     )
 
 

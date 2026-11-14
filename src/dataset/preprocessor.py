@@ -81,7 +81,7 @@ class RetinalPreprocessor:
         interp = cv2.INTER_NEAREST if is_mask else cv2.INTER_LINEAR
         return cv2.resize(image, self.target_size, interpolation=interp)
 
-    def process(self, image: np.ndarray, od_mask: Optional[np.ndarray] = None, vessel_mask: Optional[np.ndarray] = None) -> Dict[str, np.ndarray]:
+    def process(self, image: np.ndarray, od_mask: Optional[np.ndarray] = None, vessel_mask: Optional[np.ndarray] = None, oc_mask: Optional[np.ndarray] = None) -> Dict[str, np.ndarray]:
         """
         Menjalankan seluruh pipeline pre-processing (ROI Crop -> CLAHE -> Resize 512x512).
         """
@@ -90,6 +90,8 @@ class RetinalPreprocessor:
             masks["od"] = od_mask
         if vessel_mask is not None:
             masks["vessel"] = vessel_mask
+        if oc_mask is not None:
+            masks["oc"] = oc_mask
 
         # 1. ROI Crop
         cropped_img, cropped_masks = self.crop_roi(image, masks=masks if len(masks) > 0 else None)
@@ -107,6 +109,9 @@ class RetinalPreprocessor:
                 resized_od = self.resize(cropped_masks["od"], is_mask=True)
                 # Binarisasi masker ground truth jika rentang 0-255
                 result["od_mask"] = (resized_od > 127).astype(np.float32)
+            if "oc" in cropped_masks and cropped_masks["oc"] is not None:
+                resized_oc = self.resize(cropped_masks["oc"], is_mask=True)
+                result["oc_mask"] = (resized_oc > 127).astype(np.float32)
             if "vessel" in cropped_masks and cropped_masks["vessel"] is not None:
                 resized_vessel = self.resize(cropped_masks["vessel"], is_mask=True)
                 result["vessel_mask"] = (resized_vessel > 127).astype(np.float32)

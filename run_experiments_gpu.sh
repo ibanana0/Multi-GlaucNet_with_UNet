@@ -43,11 +43,11 @@ python3 src/training/train_segmentation.py \
 
 echo ""
 echo "========================================================================"
-echo "📌 TAHAP 1B: Pelatihan Segmentasi Hybrid DUNet (OD & Vessel - Novelty)"
+echo "📌 TAHAP 1B: Pelatihan Segmentasi Hybrid DUNet (OD, OC, & Vessel - Novelty)"
 echo "========================================================================"
 python3 src/training/train_segmentation.py \
     --variant hybrid \
-    --target both \
+    --target all \
     --epochs $SEG_EPOCHS \
     --batch-size $BATCH_SIZE \
     --device $DEVICE \

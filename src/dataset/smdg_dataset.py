@@ -28,6 +28,7 @@ class SMDGDataset(Dataset):
         column_mapping = {
             "fundus": "fundus_path",
             "fundus_od_seg": "od_mask_path",
+            "fundus_oc_seg": "oc_mask_path",
             "bv_seg": "vessel_mask_path",
             "types": "glaucoma_label",
             "names": "image_id"
@@ -87,15 +88,22 @@ class SMDGDataset(Dataset):
             if od_p.exists():
                 od_mask = cv2.imread(str(od_p), cv2.IMREAD_GRAYSCALE)
 
-        # 3. Muat Masker Pembuluh Darah jika tersedia
+        # 3. Muat Masker OC jika tersedia
+        oc_mask = None
+        if "oc_mask_path" in row and pd.notna(row["oc_mask_path"]):
+            oc_p = self._resolve_path(row["oc_mask_path"])
+            if oc_p.exists():
+                oc_mask = cv2.imread(str(oc_p), cv2.IMREAD_GRAYSCALE)
+
+        # 4. Muat Masker Pembuluh Darah jika tersedia
         vessel_mask = None
         if "vessel_mask_path" in row and pd.notna(row["vessel_mask_path"]):
             vessel_p = self._resolve_path(row["vessel_mask_path"])
             if vessel_p.exists():
                 vessel_mask = cv2.imread(str(vessel_p), cv2.IMREAD_GRAYSCALE)
 
-        # 4. Terapkan Preprocessing Pipeline (ROI Crop + CLAHE + Resize 512x512)
-        processed = self.preprocessor.process(img_rgb, od_mask=od_mask, vessel_mask=vessel_mask)
+        # 5. Terapkan Preprocessing Pipeline (ROI Crop + CLAHE + Resize 512x512)
+        processed = self.preprocessor.process(img_rgb, od_mask=od_mask, vessel_mask=vessel_mask, oc_mask=oc_mask)
 
         final_img = processed["image"].astype(np.float32) / 255.0  # Normalisasi [0, 1]
         # Transpose HWC -> CHW untuk PyTorch
@@ -106,6 +114,11 @@ class SMDGDataset(Dataset):
             tensor_od = torch.from_numpy(processed["od_mask"]).unsqueeze(0)  # [1, 512, 512]
         else:
             tensor_od = torch.zeros((1, 512, 512), dtype=torch.float32)
+
+        if "oc_mask" in processed:
+            tensor_oc = torch.from_numpy(processed["oc_mask"]).unsqueeze(0)  # [1, 512, 512]
+        else:
+            tensor_oc = torch.zeros((1, 512, 512), dtype=torch.float32)
 
         if "vessel_mask" in processed:
             tensor_vessel = torch.from_numpy(processed["vessel_mask"]).unsqueeze(0)  # [1, 512, 512]
@@ -120,6 +133,7 @@ class SMDGDataset(Dataset):
         return {
             "image": tensor_img,
             "od_mask": tensor_od,
+            "oc_mask": tensor_oc,
             "vessel_mask": tensor_vessel,
             "label": torch.tensor(binary_label, dtype=torch.long),
             "image_id": row.get("image_id", str(idx))
@@ -133,16 +147,20 @@ def get_dataloaders(
     train_ratio: float = 0.70,
     val_ratio: float = 0.15,
     random_seed: int = 42,
-    target_filter: Optional[str] = None
+    target_filter: Optional[str] = None,
+    subset: Optional[str] = None
 ) -> Tuple[DataLoader, DataLoader, DataLoader, pd.DataFrame]:
     """
     Membuat DataLoader untuk Train, Val, dan Test set dengan Stratified Split.
     
     Args:
-        target_filter: Opsi filter sparsitas data ("od", "vessel", atau None).
+        target_filter: Opsi filter sparsitas data ("od", "oc", "vessel", atau None).
                        Jika "od", menyaring hanya baris dengan masker OD valid.
+                       Jika "oc", menyaring hanya baris dengan masker OC valid di disk.
                        Jika "vessel", menyaring hanya baris dengan masker pembuluh darah valid
                        (krusial untuk mencegah Zero-Prediction Collapse pada SMDG-19).
+        subset: Opsi filter nama sumber dataset (contoh: "refuge", "origa", "all").
+                Berguna untuk menjalankan Head-to-Head Comparison pada subset paper acuan.
     """
     df = pd.read_csv(csv_path)
 
@@ -150,6 +168,7 @@ def get_dataloaders(
     column_mapping = {
         "fundus": "fundus_path",
         "fundus_od_seg": "od_mask_path",
+        "fundus_oc_seg": "oc_mask_path",
         "bv_seg": "vessel_mask_path",
         "types": "glaucoma_label",
         "names": "image_id"
@@ -158,21 +177,36 @@ def get_dataloaders(
         if old_col in df.columns and new_col not in df.columns:
             df[new_col] = df[old_col]
 
-    # Filter data jika ada label NaN pada tugas klasifikasi
-    if "glaucoma_label" in df.columns:
-        df = df[df["glaucoma_label"].isin([0, 1])].copy()
+    # Filter subset khusus jika ditentukan (contoh: REFUGE untuk Head-to-Head SOTA validation)
+    if subset is not None and subset.lower() != "all":
+        sub_tag = subset.strip().upper()
+        match_mask = df["image_id"].astype(str).str.upper().str.startswith(sub_tag)
+        df = df[match_mask].copy()
+        print(f"🎯 [Subset Filter] Menyaring dataset khusus '{sub_tag}': {len(df)} sampel terpilih.")
 
-    # Terapkan Target Filter (Sparsity Guard) jika ditentukan
+    # Terapkan Target Filter (Sparsity Guard) jika ditentukan untuk tugas segmentasi
     if target_filter is not None:
         tgt = target_filter.lower().strip()
         if tgt == "od" and "od_mask_path" in df.columns:
             valid_mask = df["od_mask_path"].notna() & (df["od_mask_path"].astype(str).str.strip() != "")
             df = df[valid_mask].copy()
             print(f"🛡️ [Sparsity Guard] Filter OD aktif: menyaring {len(df)} sampel dengan masker Optic Disc valid.")
+        elif tgt == "oc" and "oc_mask_path" in df.columns:
+            valid_mask = df["oc_mask_path"].notna() & (df["oc_mask_path"].astype(str).str.strip() != "")
+            df = df[valid_mask].copy()
+            # Verifikasi berkas fisik agar 229 sampel G1020 yang absen di disk tidak menyebabkan FileNotFoundError
+            temp_ds = SMDGDataset(df, root_dir=root_dir)
+            exists_mask = [temp_ds._resolve_path(p).exists() for p in df["oc_mask_path"]]
+            df = df[exists_mask].copy()
+            print(f"🛡️ [Sparsity Guard] Filter OC aktif: menyaring {len(df)} sampel dengan masker Optic Cup valid di disk.")
         elif tgt == "vessel" and "vessel_mask_path" in df.columns:
             valid_mask = df["vessel_mask_path"].notna() & (df["vessel_mask_path"].astype(str).str.strip() != "")
             df = df[valid_mask].copy()
             print(f"🛡️ [Sparsity Guard] Filter Vessel aktif: menyaring {len(df)} sampel dengan masker Pembuluh Darah valid.")
+    else:
+        # Jika bukan segmentasi khusus (mode deteksi klasifikasi), filter baris dengan label biner [0, 1]
+        if "glaucoma_label" in df.columns:
+            df = df[df["glaucoma_label"].isin([0, 1])].copy()
 
     if len(df) == 0:
         raise ValueError(f"Dataset kosong setelah penerapan filter '{target_filter}'. Periksa kembali berkas {csv_path}!")

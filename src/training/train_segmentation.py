@@ -92,25 +92,35 @@ def train_segmentation(
     lr: float = 1e-4,
     loss_type: str = "bce_dice",
     device_pref: str = "auto",
-    output_dir: str = "checkpoints/segmentation"
+    output_dir: str = "checkpoints/segmentation",
+    subset: str = "all"
 ):
     device = get_device(device_pref)
+    target_names = {"od": "Optic Disc", "oc": "Optic Cup", "vessel": "Blood Vessel"}
     print(f"🚀 Menjalankan Pelatihan Segmentasi:")
     print(f"   - Model Variant : {variant.upper()}")
-    print(f"   - Target Organ  : {target.upper()} ({'Optic Disc' if target == 'od' else 'Blood Vessel'})")
+    print(f"   - Target Organ  : {target.upper()} ({target_names.get(target, target)})")
+    print(f"   - Subset Filter : {subset.upper()}")
     print(f"   - Device        : {device}")
     print(f"   - Epochs        : {epochs} | Batch Size: {batch_size} | LR: {lr}")
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    # 1. Siapkan Dataloader dengan Target Filter (Sparsity Guard)
-    target_key = "od_mask" if target == "od" else "vessel_mask"
+    # 1. Siapkan Dataloader dengan Target Filter (Sparsity Guard) & Subset Filter
+    if target == "od":
+        target_key = "od_mask"
+    elif target == "oc":
+        target_key = "oc_mask"
+    else:
+        target_key = "vessel_mask"
+
     train_loader, val_loader, test_loader, _ = get_dataloaders(
         csv_path=csv_path,
         root_dir=root_dir,
         batch_size=batch_size,
-        target_filter=target
+        target_filter=target,
+        subset=subset if subset.lower() != "all" else None
     )
 
     # 2. Inisialisasi Model
@@ -132,7 +142,8 @@ def train_segmentation(
     best_dice = -1.0
     history = []
 
-    model_tag = f"{variant}_{target}"
+    sub_suffix = f"_{subset.lower()}" if subset.lower() != "all" else ""
+    model_tag = f"{variant}_{target}{sub_suffix}"
     best_ckpt_path = output_path / f"best_{model_tag}.pth"
 
     for epoch in range(1, epochs + 1):
@@ -223,7 +234,8 @@ def main():
     default_csv, default_root = find_default_dataset_paths()
     parser = argparse.ArgumentParser(description="MultiGlaucNet Stage 1: Segmentation Training")
     parser.add_argument("--variant", choices=["vanilla", "hybrid"], default="vanilla", help="Model variant: vanilla atau hybrid")
-    parser.add_argument("--target", choices=["od", "vessel", "both"], default="od", help="Target organ: od, vessel, atau both")
+    parser.add_argument("--target", choices=["od", "oc", "vessel", "both", "all"], default="od", help="Target organ: od, oc, vessel, both (od+vessel), atau all (od+oc+vessel)")
+    parser.add_argument("--subset", default="all", help="Subset dataset untuk Head-to-Head (contoh: refuge, origa, all)")
     parser.add_argument("--csv-path", default=default_csv, help="Path ke file CSV metadata")
     parser.add_argument("--root-dir", default=default_root, help="Root direktori citra")
     parser.add_argument("--epochs", type=int, default=15, help="Jumlah epoch pelatihan")
@@ -234,11 +246,16 @@ def main():
     parser.add_argument("--output-dir", default="checkpoints/segmentation", help="Folder simpan checkpoint")
     args = parser.parse_args()
 
-    targets = ["od", "vessel"] if args.target == "both" else [args.target]
+    if args.target == "both":
+        targets = ["od", "vessel"]
+    elif args.target == "all":
+        targets = ["od", "oc", "vessel"]
+    else:
+        targets = [args.target]
 
     for tgt in targets:
         print(f"\n{'='*60}")
-        print(f"MEMULAI PELATIHAN: {args.variant.upper()} - {tgt.upper()}")
+        print(f"MEMULAI PELATIHAN: {args.variant.upper()} - {tgt.upper()} (Subset: {args.subset.upper()})")
         print(f"{'='*60}")
         train_segmentation(
             variant=args.variant,
@@ -250,7 +267,8 @@ def main():
             lr=args.lr,
             loss_type=args.loss,
             device_pref=args.device,
-            output_dir=args.output_dir
+            output_dir=args.output_dir,
+            subset=args.subset
         )
 
 

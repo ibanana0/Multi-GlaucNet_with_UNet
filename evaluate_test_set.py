@@ -70,7 +70,7 @@ def evaluate_segmentation_model(model_variant: str, target: str, ckpt_path: Path
     model.load_state_dict(ckpt["model_state_dict"])
     model = model.to(device).eval()
 
-    target_key = "od_mask" if target == "od" else "vessel_mask"
+    target_key = "od_mask" if target == "od" else "oc_mask" if target == "oc" else "vessel_mask"
     metric_accum = {"dice": 0.0, "iou": 0.0, "accuracy": 0.0, "sensitivity": 0.0, "specificity": 0.0}
     n_samples = 0
 
@@ -266,6 +266,8 @@ def main():
     seg_models = [
         ("vanilla", "od", seg_dir / "best_vanilla_od.pth"),
         ("hybrid", "od", seg_dir / "best_hybrid_od.pth"),
+        ("vanilla", "oc", seg_dir / "best_vanilla_oc.pth"),
+        ("hybrid", "oc", seg_dir / "best_hybrid_oc.pth"),
         ("vanilla", "vessel", seg_dir / "best_vanilla_vessel.pth"),
         ("hybrid", "vessel", seg_dir / "best_hybrid_vessel.pth"),
     ]
@@ -331,7 +333,7 @@ def main():
 
     for k, v in summary["segmentation"].items():
         var_name = "Vanilla DUNet" if "vanilla" in k else "Hybrid DUNet"
-        tgt_name = "Optic Disc" if "od" in k else "Blood Vessel"
+        tgt_name = "Optic Disc" if "od" in k else "Optic Cup" if "oc" in k else "Blood Vessel"
         md_content.append(
             f"| {var_name} | {tgt_name} | **{v['dice']:.4f}** | {v['iou']:.4f} | "
             f"{v['sensitivity']:.4f} | {v['specificity']:.4f} | {v['accuracy']:.4f} |"

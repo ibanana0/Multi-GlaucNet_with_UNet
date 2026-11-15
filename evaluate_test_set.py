@@ -14,7 +14,7 @@ import sys
 import json
 import argparse
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import numpy as np
 import torch
 from tqdm import tqdm
@@ -46,7 +46,16 @@ def get_device(preferred: str = "auto") -> torch.device:
     return torch.device("cpu")
 
 
-def evaluate_segmentation_model(model_variant: str, target: str, ckpt_path: Path, csv_path: str, root_dir: str, device: torch.device, batch_size: int = 4):
+def evaluate_segmentation_model(
+    model_variant: str,
+    target: str,
+    ckpt_path: Path,
+    csv_path: str,
+    root_dir: str,
+    device: torch.device,
+    batch_size: int = 4,
+    subset: Optional[str] = None
+):
     """Mengevaluasi satu model segmentasi pada test set independen."""
     print(f"\n🔍 Menguji Segmentasi: {model_variant.upper()} - {target.upper()}...")
     if not ckpt_path.exists():
@@ -54,12 +63,17 @@ def evaluate_segmentation_model(model_variant: str, target: str, ckpt_path: Path
         return None
 
     # Muat Test DataLoader dengan Target Filter
-    _, _, test_loader, _ = get_dataloaders(
-        csv_path=csv_path,
-        root_dir=root_dir,
-        batch_size=batch_size,
-        target_filter=target
-    )
+    try:
+        _, _, test_loader, _ = get_dataloaders(
+            csv_path=csv_path,
+            root_dir=root_dir,
+            batch_size=batch_size,
+            target_filter=target,
+            subset=subset if subset and subset.lower() != "all" else None
+        )
+    except ValueError as e:
+        print(f"ℹ️ Subset '{subset}' tidak memiliki data valid untuk target '{target}'. Melewati evaluasi {target.upper()}.")
+        return None
 
     if model_variant == "vanilla":
         model = VanillaDUNet(in_channels=3, out_classes=1)
@@ -122,7 +136,8 @@ def evaluate_detector_model(
     csv_path: str,
     root_dir: str,
     device: torch.device,
-    batch_size: int = 4
+    batch_size: int = 4,
+    subset: Optional[str] = None
 ):
     """Mengevaluasi satu varian detektor glaukoma pada test set independen."""
     print(f"\n🔍 Menguji Detektor: {detector_tag}...")
@@ -135,12 +150,23 @@ def evaluate_detector_model(
         csv_path=csv_path,
         root_dir=root_dir,
         batch_size=batch_size,
-        target_filter=None
+        target_filter=None,
+        subset=subset if subset and subset.lower() != "all" else None
     )
 
     # 1. Muat Segmentasi OD & Vessel
-    od_ckpt = seg_dir / f"best_{seg_variant}_od.pth"
-    vessel_ckpt = seg_dir / f"best_{seg_variant}_vessel.pth"
+    sub_suffix = f"_{subset.lower()}" if subset and subset.lower() != "all" else ""
+    od_candidates = [
+        seg_dir / f"best_{seg_variant}_od{sub_suffix}.pth",
+        seg_dir / f"best_{seg_variant}_od.pth",
+    ]
+    od_ckpt = next((c for c in od_candidates if c.exists()), seg_dir / f"best_{seg_variant}_od.pth")
+
+    vessel_candidates = [
+        seg_dir / f"best_{seg_variant}_vessel{sub_suffix}.pth",
+        seg_dir / f"best_{seg_variant}_vessel.pth",
+    ]
+    vessel_ckpt = next((c for c in vessel_candidates if c.exists()), seg_dir / f"best_{seg_variant}_vessel.pth")
 
     if seg_variant == "vanilla":
         model_od = VanillaDUNet(in_channels=3, out_classes=1)
@@ -241,40 +267,52 @@ def main():
     parser.add_argument("--root-dir", default=default_root, help="Root direktori citra")
     parser.add_argument("--device", choices=["auto", "cuda", "mps", "cpu"], default="auto", help="Komputasi device")
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size evaluasi")
+    parser.add_argument("--seg-dir", default=str(PROJECT_ROOT / "checkpoints/segmentation"), help="Folder checkpoint segmentasi")
+    parser.add_argument("--det-dir", default=str(PROJECT_ROOT / "checkpoints/detection"), help="Folder checkpoint deteksi")
+    parser.add_argument("--output-dir", default=str(PROJECT_ROOT / "results"), help="Folder simpan hasil evaluasi")
+    parser.add_argument("--subset", default="all", help="Subset dataset untuk evaluasi (contoh: refuge, all)")
     args = parser.parse_args()
 
     device = get_device(args.device)
     print(f"🚀 Memulai Pengujian Independen Test Set MultiGlaucNet pada Device: {device}")
+    if args.subset and args.subset.lower() != "all":
+        print(f"🎯 [Subset Filter Evaluasi]: {args.subset.upper()}")
 
-    results_dir = PROJECT_ROOT / "results"
+    results_dir = Path(args.output_dir)
     vis_dir = results_dir / "visualizations"
     results_dir.mkdir(parents=True, exist_ok=True)
     vis_dir.mkdir(parents=True, exist_ok=True)
 
-    seg_dir = PROJECT_ROOT / "checkpoints/segmentation"
-    det_dir = PROJECT_ROOT / "checkpoints/detection"
+    seg_dir = Path(args.seg_dir)
+    det_dir = Path(args.det_dir)
 
     summary: Dict[str, Any] = {"segmentation": {}, "detection": {}}
+    sub_suffix = f"_{args.subset.lower()}" if args.subset and args.subset.lower() != "all" else ""
 
     # =========================================================================
-    # 1. EVALUASI TAHAP 1: SEGMENTASI (OD & VESSEL)
+    # 1. EVALUASI TAHAP 1: SEGMENTASI (OD, OC, & VESSEL)
     # =========================================================================
     print("\n" + "=" * 70)
-    print("TAHAP 1: EVALUASI SEGMENTASI OPTIC DISC & PEMBULUH DARAH PADA TEST SET")
+    print("TAHAP 1: EVALUASI SEGMENTASI OPTIC DISC, CUP, & PEMBULUH DARAH PADA TEST SET")
     print("=" * 70)
 
-    seg_models = [
-        ("vanilla", "od", seg_dir / "best_vanilla_od.pth"),
-        ("hybrid", "od", seg_dir / "best_hybrid_od.pth"),
-        ("vanilla", "oc", seg_dir / "best_vanilla_oc.pth"),
-        ("hybrid", "oc", seg_dir / "best_hybrid_oc.pth"),
-        ("vanilla", "vessel", seg_dir / "best_vanilla_vessel.pth"),
-        ("hybrid", "vessel", seg_dir / "best_hybrid_vessel.pth"),
+    seg_targets = [
+        ("vanilla", "od"),
+        ("hybrid", "od"),
+        ("vanilla", "oc"),
+        ("hybrid", "oc"),
+        ("vanilla", "vessel"),
+        ("hybrid", "vessel"),
     ]
 
-    for variant, target, ckpt in seg_models:
+    for variant, target in seg_targets:
         key = f"{variant}_{target}"
-        res = evaluate_segmentation_model(variant, target, ckpt, args.csv_path, args.root_dir, device, args.batch_size)
+        candidates = [
+            seg_dir / f"best_{variant}_{target}{sub_suffix}.pth",
+            seg_dir / f"best_{variant}_{target}.pth",
+        ]
+        ckpt = next((c for c in candidates if c.exists()), candidates[0])
+        res = evaluate_segmentation_model(variant, target, ckpt, args.csv_path, args.root_dir, device, args.batch_size, subset=args.subset)
         if res:
             summary["segmentation"][key] = res
 
@@ -285,17 +323,24 @@ def main():
     print("TAHAP 2: EVALUASI DETEKSI GLAUKOMA & ABLASI LOSS PADA TEST SET")
     print("=" * 70)
 
-    detectors = [
-        ("Vanilla_Scenario1_CE", det_dir / "best_detector_vanilla_sc1.pth", "vanilla", "#2ca02c", "--"),
-        ("Vanilla_Scenario2_StdFocal", det_dir / "best_detector_vanilla_sc2.pth", "vanilla", "#1f77b4", "-."),
-        ("Vanilla_Scenario3_ExtremeFocal", det_dir / "best_detector_vanilla_sc3.pth", "vanilla", "#ff7f0e", ":"),
-        ("Hybrid_Scenario2_Proposed", det_dir / "best_detector_hybrid_sc2.pth", "hybrid", "#d62728", "-"),
+    detectors_cfg = [
+        ("Vanilla_Scenario1_CE", "vanilla", "sc1", "#2ca02c", "--"),
+        ("Vanilla_Scenario2_StdFocal", "vanilla", "sc2", "#1f77b4", "-."),
+        ("Vanilla_Scenario3_ExtremeFocal", "vanilla", "sc3", "#ff7f0e", ":"),
+        ("Hybrid_Scenario1_CE", "hybrid", "sc1", "#9467bd", "--"),
+        ("Hybrid_Scenario2_Proposed", "hybrid", "sc2", "#d62728", "-"),
+        ("Hybrid_Scenario3_ExtremeFocal", "hybrid", "sc3", "#8c564b", ":"),
     ]
 
     roc_plot_dict = {}
 
-    for tag, ckpt, seg_var, color, line_style in detectors:
-        res = evaluate_detector_model(tag, ckpt, seg_var, seg_dir, args.csv_path, args.root_dir, device, args.batch_size)
+    for tag, seg_var, sc_tag, color, line_style in detectors_cfg:
+        candidates = [
+            det_dir / f"best_detector_{seg_var}_{sc_tag}{sub_suffix}.pth",
+            det_dir / f"best_detector_{seg_var}_{sc_tag}.pth",
+        ]
+        ckpt = next((c for c in candidates if c.exists()), candidates[0])
+        res = evaluate_detector_model(tag, ckpt, seg_var, seg_dir, args.csv_path, args.root_dir, device, args.batch_size, subset=args.subset)
         if res:
             summary["detection"][tag] = {k: v for k, v in res.items() if k != "roc_curve"}
             if "roc_curve" in res and len(res["roc_curve"]["fpr"]) > 0:

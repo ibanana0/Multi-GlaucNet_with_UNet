@@ -13,6 +13,7 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 
 from .preprocessor import RetinalPreprocessor
+from .master_split import generate_master_split
 
 
 class SMDGDataset(Dataset):
@@ -148,10 +149,11 @@ def get_dataloaders(
     val_ratio: float = 0.15,
     random_seed: int = 42,
     target_filter: Optional[str] = None,
-    subset: Optional[str] = None
+    subset: Optional[str] = None,
+    split_file: Optional[str] = None
 ) -> Tuple[DataLoader, DataLoader, DataLoader, pd.DataFrame]:
     """
-    Membuat DataLoader untuk Train, Val, dan Test set dengan Stratified Split.
+    Membuat DataLoader untuk Train, Val, dan Test set dengan Master-Split terstandarisasi.
     
     Args:
         target_filter: Opsi filter sparsitas data ("od", "oc", "vessel", atau None).
@@ -161,6 +163,8 @@ def get_dataloaders(
                        (krusial untuk mencegah Zero-Prediction Collapse pada SMDG-19).
         subset: Opsi filter nama sumber dataset (contoh: "refuge", "origa", "all").
                 Berguna untuk menjalankan Head-to-Head Comparison pada subset paper acuan.
+        split_file: Path khusus ke berkas master split CSV (opsional). Jika None,
+                    akan mencari 'splits/master_split_seed42.csv' secara otomatis.
     """
     df = pd.read_csv(csv_path)
 
@@ -177,14 +181,60 @@ def get_dataloaders(
         if old_col in df.columns and new_col not in df.columns:
             df[new_col] = df[old_col]
 
-    # Filter subset khusus jika ditentukan (contoh: REFUGE untuk Head-to-Head SOTA validation)
+    # 1. Hubungkan dengan Master-Split Deterministik (Zero-Leakage Protection)
+    if "split" not in df.columns:
+        candidate_split_paths = []
+        if split_file is not None:
+            candidate_split_paths.append(Path(split_file))
+
+        proj_root = Path(__file__).resolve().parent.parent.parent
+        candidate_split_paths.extend([
+            proj_root / "splits" / f"master_split_seed{random_seed}.csv",
+            Path(csv_path).parent / "splits" / f"master_split_seed{random_seed}.csv",
+            Path(f"splits/master_split_seed{random_seed}.csv")
+        ])
+
+        master_loaded = False
+        for sp in candidate_split_paths:
+            if sp.exists():
+                try:
+                    split_df = pd.read_csv(sp)
+                    id_col_split = "image_id" if "image_id" in split_df.columns else "names"
+                    df = df.merge(
+                        split_df[[id_col_split, "split"]].rename(columns={id_col_split: "image_id"}),
+                        on="image_id",
+                        how="left"
+                    )
+                    master_loaded = True
+                    break
+                except Exception as e:
+                    print(f"⚠️ Gagal memuat berkas split {sp}: {e}")
+
+        # Jika belum ada dan dataset berskala penuh (>= 100 citra), buat otomatis
+        if not master_loaded and len(df) >= 100:
+            target_out = proj_root / "splits" / f"master_split_seed{random_seed}.csv"
+            split_df = generate_master_split(
+                csv_path=csv_path,
+                output_path=str(target_out),
+                train_ratio=train_ratio,
+                val_ratio=val_ratio,
+                random_seed=random_seed
+            )
+            id_col_split = "image_id" if "image_id" in split_df.columns else "names"
+            df = df.merge(
+                split_df[[id_col_split, "split"]].rename(columns={id_col_split: "image_id"}),
+                on="image_id",
+                how="left"
+            )
+
+    # 2. Filter subset khusus jika ditentukan (contoh: REFUGE untuk Head-to-Head SOTA validation)
     if subset is not None and subset.lower() != "all":
         sub_tag = subset.strip().upper()
         match_mask = df["image_id"].astype(str).str.upper().str.startswith(sub_tag)
         df = df[match_mask].copy()
         print(f"🎯 [Subset Filter] Menyaring dataset khusus '{sub_tag}': {len(df)} sampel terpilih.")
 
-    # Terapkan Target Filter (Sparsity Guard) jika ditentukan untuk tugas segmentasi
+    # 3. Terapkan Target Filter (Sparsity Guard) jika ditentukan untuk tugas segmentasi
     if target_filter is not None:
         tgt = target_filter.lower().strip()
         if tgt == "od" and "od_mask_path" in df.columns:
@@ -211,7 +261,13 @@ def get_dataloaders(
     if len(df) == 0:
         raise ValueError(f"Dataset kosong setelah penerapan filter '{target_filter}'. Periksa kembali berkas {csv_path}!")
 
-    if len(df) < 10:
+    # 4. Pembagian Partisi Train / Val / Test
+    if "split" in df.columns and df["split"].notna().all():
+        print("🔒 [Master-Split] Menggunakan partisi konsisten bebas kebocoran (Zero Cross-Stage Leakage).")
+        train_df = df[df["split"] == "train"].copy()
+        val_df = df[df["split"] == "val"].copy()
+        test_df = df[df["split"] == "test"].copy()
+    elif len(df) < 10:
         n_train = max(1, int(len(df) * train_ratio))
         train_df = df.iloc[:n_train].copy()
         rem_df = df.iloc[n_train:].copy()
@@ -226,8 +282,8 @@ def get_dataloaders(
             val_df = train_df.copy()
             test_df = train_df.copy()
     else:
-        # Stratified Split: Train vs Temp (Val + Test)
-        temp_ratio = 1.0 - train_ratio
+        # Fallback Stratified Split dinamis
+        temp_ratio = round(1.0 - train_ratio, 4)
         stratify_col = df["glaucoma_label"] if ("glaucoma_label" in df.columns and df["glaucoma_label"].nunique() > 1) else None
 
         train_df, temp_df = train_test_split(
@@ -237,8 +293,7 @@ def get_dataloaders(
             stratify=stratify_col
         )
 
-        # Split Temp menjadi Val dan Test
-        val_rel_ratio = min(max(val_ratio / temp_ratio, 0.1), 0.9)
+        val_rel_ratio = min(max(round(val_ratio / temp_ratio, 4), 0.1), 0.9)
         stratify_temp = temp_df["glaucoma_label"] if ("glaucoma_label" in temp_df.columns and temp_df["glaucoma_label"].nunique() > 1) else None
 
         val_df, test_df = train_test_split(

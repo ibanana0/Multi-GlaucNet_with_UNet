@@ -6,8 +6,11 @@ masked inputs (I_OD and I_vessel), and detection probabilities.
 
 import os
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Union, List, Dict, Any
+import cv2
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")  # Menjamin eksekusi headless aman di container server
 import matplotlib.pyplot as plt
 import torch
 
@@ -213,3 +216,154 @@ def save_three_branch_overview_plot(
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close()
     print(f"📊 Visualisasi Three-Branch disimpan ke: {save_path} (DPI 300)")
+
+
+def save_gradcam_multibranch_plot(
+    cases_data: List[Dict[str, Any]],
+    save_path: str = "results/xai/gradcam_representative_cases.png"
+):
+    """
+    Menyimpan plot multi-panel Grad-CAM (DPI 300) untuk kasus-kasus representatif (TP, TN, FP, FN).
+
+    Setiap elemen cases_data harus berupa dict dengan kunci:
+        - "category": str (misal "True Positive (Glaucoma)")
+        - "image_id": str
+        - "prob": float
+        - "true_label": int
+        - "I_orig": np.ndarray [H, W, 3] dalam [0, 1]
+        - "I_od": np.ndarray [H, W, 3] dalam [0, 1]
+        - "I_vessel": np.ndarray [H, W, 3] dalam [0, 1]
+        - "cams": Dict[str, np.ndarray] dengan kunci "orig", "od", "vessel"
+    """
+    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+    n_rows = len(cases_data)
+    if n_rows == 0:
+        print("⚠️ Tidak ada data kasus untuk divisualisasikan pada Grad-CAM.")
+        return
+
+    n_cols = 6
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 3.5, n_rows * 3.6))
+    if n_rows == 1:
+        axes = np.expand_dims(axes, 0)
+
+    col_titles = [
+        "Citra Asli (I_orig)",
+        "Masked OD (I_OD)",
+        "Masked Vessel (I_vessel)",
+        "Grad-CAM: Global Retina",
+        "Grad-CAM: Optic Disc",
+        "Grad-CAM: Pembuluh Darah"
+    ]
+
+    for col_idx, title in enumerate(col_titles):
+        axes[0, col_idx].set_title(title, fontsize=12, fontweight="bold", pad=10)
+
+    for row_idx, case in enumerate(cases_data):
+        img_orig = case["I_orig"]
+        img_od = case["I_od"]
+        img_vessel = case["I_vessel"]
+        cams = case["cams"]
+
+        # Fungsi overlay heatmap JET
+        def get_overlay(base_img, cam_mask):
+            heatmap = cv2.applyColorMap(np.uint8(255 * np.clip(cam_mask, 0.0, 1.0)), cv2.COLORMAP_JET)
+            heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+            overlay = 0.55 * base_img + 0.45 * heatmap
+            return np.clip(overlay, 0.0, 1.0)
+
+        overlay_orig = get_overlay(img_orig, cams.get("orig", np.zeros_like(img_orig[:, :, 0])))
+        overlay_od = get_overlay(img_orig, cams.get("od", np.zeros_like(img_orig[:, :, 0])))
+        overlay_vessel = get_overlay(img_orig, cams.get("vessel", np.zeros_like(img_orig[:, :, 0])))
+
+        # Tampilkan pada baris
+        axes[row_idx, 0].imshow(img_orig)
+        axes[row_idx, 1].imshow(img_od)
+        axes[row_idx, 2].imshow(img_vessel)
+        axes[row_idx, 3].imshow(overlay_orig)
+        axes[row_idx, 4].imshow(overlay_od)
+        axes[row_idx, 5].imshow(overlay_vessel)
+
+        # Label kategori di sebelah kiri
+        label_str = "Glaukoma" if case["true_label"] == 1 else "Normal"
+        pred_str = "Glaukoma" if case["prob"] >= 0.5 else "Normal"
+        row_label = f"[{case['category']}]\nID: {case['image_id']}\nGT: {label_str}\nPred: {pred_str} (P={case['prob']:.2f})"
+        axes[row_idx, 0].set_ylabel(row_label, fontsize=10, fontweight="semibold")
+
+        for c in range(n_cols):
+            axes[row_idx, c].set_xticks([])
+            axes[row_idx, c].set_yticks([])
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"📊 Visualisasi Multi-Branch Grad-CAM disimpan ke: {save_path} (DPI 300)")
+
+
+def save_branch_attribution_boxplot(
+    df_attributions,
+    save_path: str = "results/xai/branch_attribution_distribution.png"
+):
+    """
+    Menyimpan plot distribusi kontribusi persentase 3 cabang untuk kelas Normal vs Glaukoma (DPI 300).
+    """
+    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    categories = ["pct_orig", "pct_od", "pct_vessel"]
+    labels = ["Cabang Citra Asli", "Cabang Optic Disc", "Cabang Pembuluh Darah"]
+    colors = ["#4C72B0", "#55A868", "#C44E52"]
+
+    data_to_plot = []
+    tick_positions = []
+    tick_labels = []
+
+    pos = 1
+    for i, col in enumerate(categories):
+        normal_data = df_attributions[df_attributions["true_label"] == 0][col].dropna().values
+        glaucoma_data = df_attributions[df_attributions["true_label"] == 1][col].dropna().values
+
+        data_to_plot.append(normal_data if len(normal_data) > 0 else [0.0])
+        data_to_plot.append(glaucoma_data if len(glaucoma_data) > 0 else [0.0])
+
+        tick_positions.append(pos + 0.5)
+        tick_labels.append(labels[i])
+        pos += 3
+
+    positions = [1, 2, 4, 5, 7, 8]
+    bp = ax.boxplot(
+        data_to_plot,
+        positions=positions,
+        widths=0.7,
+        patch_artist=True,
+        showmeans=True,
+        meanline=True,
+        medianprops=dict(color="black", linewidth=1.5),
+        meanprops=dict(color="blue", linestyle="--", linewidth=1.5)
+    )
+
+    box_colors = ["#A1C9F4", "#FF9F9B", "#A1C9F4", "#FF9F9B", "#A1C9F4", "#FF9F9B"]
+    for patch, color in zip(bp["boxes"], box_colors):
+        patch.set_facecolor(color)
+        patch.set_alpha(0.8)
+
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels(tick_labels, fontsize=12, fontweight="semibold")
+    ax.set_ylabel("Kontribusi Relatif (%)", fontsize=12, fontweight="semibold")
+    ax.set_title("Distribusi Kontribusi Cabang ResNet-50 pada Test Set SMDG-19", fontsize=14, fontweight="bold", pad=12)
+    ax.set_ylim(-5, 105)
+    ax.grid(axis="y", linestyle=":", alpha=0.6)
+
+    # Legenda
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor="#A1C9F4", edgecolor="black", label="Mata Normal (Negatif)"),
+        Patch(facecolor="#FF9F9B", edgecolor="black", label="Mata Glaukoma (Positif)"),
+        plt.Line2D([0], [0], color="blue", linestyle="--", linewidth=1.5, label="Mean Kontribusi")
+    ]
+    ax.legend(handles=legend_elements, loc="upper right", frameon=True)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"📊 Visualisasi Distribusi Kontribusi Cabang disimpan ke: {save_path} (DPI 300)")

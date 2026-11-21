@@ -1,0 +1,1196 @@
+{
+  "segmentation": {
+    "vanilla_od": {
+      "CRFO": {
+        "dice": 0.04379614909763557,
+        "iou": 0.02242050170935729,
+        "sensitivity": 1.0,
+        "specificity": 3.9023216212368894e-13,
+        "accuracy": 0.02242050170897582,
+        "sample_count": 5
+      },
+      "DRISHTI": {
+        "dice": 0.05902438270063191,
+        "iou": 0.030470371246707734,
+        "sensitivity": 1.0,
+        "specificity": 3.9348535226468417e-13,
+        "accuracy": 0.030470371246326268,
+        "sample_count": 16
+      },
+      "G1020": {
+        "dice": 0.037513663055899864,
+        "iou": 0.019132177814533698,
+        "sensitivity": 1.0,
+        "specificity": 3.889173850945219e-13,
+        "accuracy": 0.01913217781415223,
+        "sample_count": 153
+      },
+      "ORIGA": {
+        "dice": 0.036975513322604146,
+        "iou": 0.01884635613926538,
+        "sensitivity": 1.0,
+        "specificity": 3.8880140515671075e-13,
+        "accuracy": 0.018846356138883913,
+        "sample_count": 98
+      },
+      "PAPILA": {
+        "dice": 0.06494915291022914,
+        "iou": 0.03361531850490833,
+        "sensitivity": 1.0,
+        "specificity": 3.947611713144954e-13,
+        "accuracy": 0.033615318504526856,
+        "sample_count": 74
+      },
+      "REFUGE": {
+        "dice": 0.033583742131562386,
+        "iou": 0.017093976339079373,
+        "sensitivity": 1.0,
+        "specificity": 3.881103742343598e-13,
+        "accuracy": 0.017093976338697903,
+        "sample_count": 120
+      }
+    },
+    "hybrid_od": {
+      "CRFO": {
+        "dice": 0.04379614909763557,
+        "iou": 0.02242050170935729,
+        "sensitivity": 1.0,
+        "specificity": 3.9023216212368894e-13,
+        "accuracy": 0.02242050170897582,
+        "sample_count": 5
+      },
+      "DRISHTI": {
+        "dice": 0.05902438270063191,
+        "iou": 0.030470371246707734,
+        "sensitivity": 1.0,
+        "specificity": 3.9348535226468417e-13,
+        "accuracy": 0.030470371246326268,
+        "sample_count": 16
+      },
+      "G1020": {
+        "dice": 0.037513663055899864,
+        "iou": 0.019132177814533698,
+        "sensitivity": 1.0,
+        "specificity": 3.889173850945219e-13,
+        "accuracy": 0.01913217781415223,
+        "sample_count": 153
+      },
+      "ORIGA": {
+        "dice": 0.036975513322604146,
+        "iou": 0.01884635613926538,
+        "sensitivity": 1.0,
+        "specificity": 3.8880140515671075e-13,
+        "accuracy": 0.018846356138883913,
+        "sample_count": 98
+      },
+      "PAPILA": {
+        "dice": 0.06494915291022914,
+        "iou": 0.03361531850490833,
+        "sensitivity": 1.0,
+        "specificity": 3.947611713144954e-13,
+        "accuracy": 0.033615318504526856,
+        "sample_count": 74
+      },
+      "REFUGE": {
+        "dice": 0.033583742131562386,
+        "iou": 0.017093976339079373,
+        "sensitivity": 1.0,
+        "specificity": 3.881103742343598e-13,
+        "accuracy": 0.017093976338697903,
+        "sample_count": 120
+      }
+    },
+    "hybrid_oc": {
+      "CRFO": {
+        "dice": 0.017858706503040174,
+        "iou": 0.009019470215221778,
+        "sensitivity": 1.0,
+        "specificity": 3.849455133493979e-13,
+        "accuracy": 0.00901947021484031,
+        "sample_count": 5
+      },
+      "DRISHTI": {
+        "dice": 0.03323718340740469,
+        "iou": 0.016978025436776362,
+        "sensitivity": 1.0,
+        "specificity": 3.880904558392271e-13,
+        "accuracy": 0.01697802543639489,
+        "sample_count": 16
+      },
+      "G1020": {
+        "dice": 0.00846834727055424,
+        "iou": 0.00425609465606281,
+        "sensitivity": 1.0,
+        "specificity": 3.831017635930854e-13,
+        "accuracy": 0.004256094655681342,
+        "sample_count": 124
+      },
+      "ORIGA": {
+        "dice": 0.014304824820320984,
+        "iou": 0.007213358976781781,
+        "sensitivity": 1.0,
+        "specificity": 3.842451271026471e-13,
+        "accuracy": 0.007213358976400311,
+        "sample_count": 98
+      },
+      "PAPILA": {
+        "dice": 0.010348559700511354,
+        "iou": 0.005220928708017781,
+        "sensitivity": 1.0,
+        "specificity": 3.834795713583615e-13,
+        "accuracy": 0.00522092870763631,
+        "sample_count": 74
+      },
+      "REFUGE": {
+        "dice": 0.009151761350125975,
+        "iou": 0.004606310526909661,
+        "sensitivity": 1.0,
+        "specificity": 3.8323880773550123e-13,
+        "accuracy": 0.00460631052652819,
+        "sample_count": 120
+      }
+    },
+    "vanilla_vessel": {
+      "DR-HAGIS": {
+        "dice": 0.11630636658495899,
+        "iou": 0.06176948547399072,
+        "sensitivity": 1.0,
+        "specificity": 4.065968312812687e-13,
+        "accuracy": 0.06176948547360925,
+        "sample_count": 2
+      },
+      "FIVES": {
+        "dice": 0.13737772559839587,
+        "iou": 0.07439778645868642,
+        "sensitivity": 1.0,
+        "specificity": 4.124419665748904e-13,
+        "accuracy": 0.07439778645830496,
+        "sample_count": 60
+      },
+      "HRF": {
+        "dice": 0.15837427623846836,
+        "iou": 0.08618672688836942,
+        "sensitivity": 1.0,
+        "specificity": 4.175504358758043e-13,
+        "accuracy": 0.08618672688798795,
+        "sample_count": 3
+      },
+      "LES-AV": {
+        "dice": 0.1442358259312847,
+        "iou": 0.07805919647251966,
+        "sensitivity": 1.0,
+        "specificity": 4.1394739379283545e-13,
+        "accuracy": 0.07805919647213819,
+        "sample_count": 4
+      }
+    },
+    "hybrid_vessel": {
+      "DR-HAGIS": {
+        "dice": 0.11630636658495899,
+        "iou": 0.06176948547399072,
+        "sensitivity": 1.0,
+        "specificity": 4.065968312812687e-13,
+        "accuracy": 0.06176948547360925,
+        "sample_count": 2
+      },
+      "FIVES": {
+        "dice": 0.13737772559839587,
+        "iou": 0.07439778645868642,
+        "sensitivity": 1.0,
+        "specificity": 4.124419665748904e-13,
+        "accuracy": 0.07439778645830496,
+        "sample_count": 60
+      },
+      "HRF": {
+        "dice": 0.15837427623846836,
+        "iou": 0.08618672688836942,
+        "sensitivity": 1.0,
+        "specificity": 4.175504358758043e-13,
+        "accuracy": 0.08618672688798795,
+        "sample_count": 3
+      },
+      "LES-AV": {
+        "dice": 0.1442358259312847,
+        "iou": 0.07805919647251966,
+        "sensitivity": 1.0,
+        "specificity": 4.1394739379283545e-13,
+        "accuracy": 0.07805919647213819,
+        "sample_count": 4
+      }
+    }
+  },
+  "detection": {
+    "Hybrid_Scenario2_Proposed": {
+      "AIROGS": {
+        "accuracy": 0.953156822616465,
+        "sensitivity": 0.953156822616465,
+        "specificity": 0.0,
+        "precision": 0.9999999997863247,
+        "f1_score": 0.9760166338710946,
+        "auc_roc": NaN,
+        "youden_optimal_threshold": Infinity,
+        "youden_j_score": NaN,
+        "confusion_matrix": [
+          [
+            0,
+            0
+          ],
+          [
+            23,
+            468
+          ]
+        ],
+        "sample_count": 491,
+        "normal_count": 0,
+        "glaucoma_count": 491
+      },
+      "BEH": {
+        "accuracy": 0.8749999990885418,
+        "sensitivity": 0.7307692279585799,
+        "specificity": 0.928571427244898,
+        "precision": 0.7916666633680556,
+        "f1_score": 0.7599999470400034,
+        "auc_roc": 0.9186813186813187,
+        "youden_optimal_threshold": 0.6341626048088074,
+        "youden_j_score": 0.6736263736263736,
+        "confusion_matrix": [
+          [
+            65,
+            5
+          ],
+          [
+            7,
+            19
+          ]
+        ],
+        "sample_count": 96,
+        "normal_count": 70,
+        "glaucoma_count": 26
+      },
+      "CRFO": {
+        "accuracy": 0.4999999958333334,
+        "sensitivity": 0.2857142816326531,
+        "specificity": 0.7999999840000003,
+        "precision": 0.6666666444444452,
+        "f1_score": 0.39999995000000427,
+        "auc_roc": 0.7,
+        "youden_optimal_threshold": 0.15798170864582062,
+        "youden_j_score": 0.4,
+        "confusion_matrix": [
+          [
+            4,
+            1
+          ],
+          [
+            5,
+            2
+          ]
+        ],
+        "sample_count": 12,
+        "normal_count": 5,
+        "glaucoma_count": 7
+      },
+      "DR-HAGIS": {
+        "accuracy": 0.0,
+        "sensitivity": 0.0,
+        "specificity": 0.0,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": NaN,
+        "youden_optimal_threshold": Infinity,
+        "youden_j_score": NaN,
+        "confusion_matrix": [
+          [
+            0,
+            0
+          ],
+          [
+            2,
+            0
+          ]
+        ],
+        "sample_count": 2,
+        "normal_count": 0,
+        "glaucoma_count": 2
+      },
+      "DRISHTI": {
+        "accuracy": 0.812499994921875,
+        "sensitivity": 0.7272727206611571,
+        "specificity": 0.9999999800000003,
+        "precision": 0.9999999875000002,
+        "f1_score": 0.842105205540169,
+        "auc_roc": 0.7818181818181819,
+        "youden_optimal_threshold": 0.6836063861846924,
+        "youden_j_score": 0.7272727272727273,
+        "confusion_matrix": [
+          [
+            5,
+            0
+          ],
+          [
+            3,
+            8
+          ]
+        ],
+        "sample_count": 16,
+        "normal_count": 5,
+        "glaucoma_count": 11
+      },
+      "FIVES": {
+        "accuracy": 0.7333333321111111,
+        "sensitivity": 0.6363636334710744,
+        "specificity": 0.789473682132964,
+        "precision": 0.6363636334710744,
+        "f1_score": 0.6363635834710784,
+        "auc_roc": 0.7930622009569379,
+        "youden_optimal_threshold": 0.24707043170928955,
+        "youden_j_score": 0.5813397129186604,
+        "confusion_matrix": [
+          [
+            30,
+            8
+          ],
+          [
+            8,
+            14
+          ]
+        ],
+        "sample_count": 60,
+        "normal_count": 38,
+        "glaucoma_count": 22
+      },
+      "G1020": {
+        "accuracy": 0.6928104570635226,
+        "sensitivity": 0.18181818140495867,
+        "specificity": 0.8990825679824931,
+        "precision": 0.42105262936288085,
+        "f1_score": 0.25396821103553224,
+        "auc_roc": 0.4541284403669725,
+        "youden_optimal_threshold": 0.4790281057357788,
+        "youden_j_score": 0.0944537114261885,
+        "confusion_matrix": [
+          [
+            98,
+            11
+          ],
+          [
+            36,
+            8
+          ]
+        ],
+        "sample_count": 153,
+        "normal_count": 109,
+        "glaucoma_count": 44
+      },
+      "HRF": {
+        "accuracy": 0.8769230755739645,
+        "sensitivity": 0.5882352906574394,
+        "specificity": 0.9791666646267361,
+        "precision": 0.9090909008264464,
+        "f1_score": 0.7142856614795949,
+        "auc_roc": 0.9093137254901961,
+        "youden_optimal_threshold": 0.09244605153799057,
+        "youden_j_score": 0.7990196078431372,
+        "confusion_matrix": [
+          [
+            47,
+            1
+          ],
+          [
+            7,
+            10
+          ]
+        ],
+        "sample_count": 65,
+        "normal_count": 48,
+        "glaucoma_count": 17
+      },
+      "JSIEC": {
+        "accuracy": 0.9999999833333336,
+        "sensitivity": 0.0,
+        "specificity": 0.9999999833333336,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": NaN,
+        "youden_optimal_threshold": Infinity,
+        "youden_j_score": NaN,
+        "confusion_matrix": [
+          [
+            6,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "sample_count": 6,
+        "normal_count": 6,
+        "glaucoma_count": 0
+      },
+      "LES-AV": {
+        "accuracy": 0.9999999750000006,
+        "sensitivity": 0.9999999500000026,
+        "specificity": 0.9999999500000026,
+        "precision": 0.9999999500000026,
+        "f1_score": 0.9999999000000052,
+        "auc_roc": 1.0,
+        "youden_optimal_threshold": 0.6667449474334717,
+        "youden_j_score": 1.0,
+        "confusion_matrix": [
+          [
+            2,
+            0
+          ],
+          [
+            0,
+            2
+          ]
+        ],
+        "sample_count": 4,
+        "normal_count": 2,
+        "glaucoma_count": 2
+      },
+      "ODIR": {
+        "accuracy": 0.9250374811206841,
+        "sensitivity": 0.545454544214876,
+        "specificity": 0.9518459067493025,
+        "precision": 0.4444444436213992,
+        "f1_score": 0.4897958678883849,
+        "auc_roc": 0.8949730045235664,
+        "youden_optimal_threshold": 0.04753222316503525,
+        "youden_j_score": 0.7114037647745513,
+        "confusion_matrix": [
+          [
+            593,
+            30
+          ],
+          [
+            20,
+            24
+          ]
+        ],
+        "sample_count": 667,
+        "normal_count": 623,
+        "glaucoma_count": 44
+      },
+      "ORIGA": {
+        "accuracy": 0.8367346930237402,
+        "sensitivity": 0.51999999792,
+        "specificity": 0.9452054781572529,
+        "precision": 0.7647058778546713,
+        "f1_score": 0.6190475679138359,
+        "auc_roc": 0.8542465753424657,
+        "youden_optimal_threshold": 0.09766941517591476,
+        "youden_j_score": 0.6208219178082192,
+        "confusion_matrix": [
+          [
+            69,
+            4
+          ],
+          [
+            12,
+            13
+          ]
+        ],
+        "sample_count": 98,
+        "normal_count": 73,
+        "glaucoma_count": 25
+      },
+      "PAPILA": {
+        "accuracy": 0.8571428557823129,
+        "sensitivity": 0.38461538165680476,
+        "specificity": 0.9799999980399999,
+        "precision": 0.8333333194444447,
+        "f1_score": 0.526315740720225,
+        "auc_roc": 0.6492307692307694,
+        "youden_optimal_threshold": 0.2000615894794464,
+        "youden_j_score": 0.38153846153846155,
+        "confusion_matrix": [
+          [
+            49,
+            1
+          ],
+          [
+            8,
+            5
+          ]
+        ],
+        "sample_count": 63,
+        "normal_count": 50,
+        "glaucoma_count": 13
+      },
+      "REFUGE": {
+        "accuracy": 0.9416666658819445,
+        "sensitivity": 0.4999999958333334,
+        "specificity": 0.9907407398233883,
+        "precision": 0.8571428448979593,
+        "f1_score": 0.6315788941828289,
+        "auc_roc": 0.8919753086419753,
+        "youden_optimal_threshold": 0.021247072145342827,
+        "youden_j_score": 0.6851851851851852,
+        "confusion_matrix": [
+          [
+            107,
+            1
+          ],
+          [
+            6,
+            6
+          ]
+        ],
+        "sample_count": 120,
+        "normal_count": 108,
+        "glaucoma_count": 12
+      }
+    },
+    "Hybrid_Scenario3_ExtremeFocal": {
+      "AIROGS": {
+        "accuracy": 0.006109979632156827,
+        "sensitivity": 0.006109979632156827,
+        "specificity": 0.0,
+        "precision": 0.9999999666666678,
+        "f1_score": 0.012145747775738087,
+        "auc_roc": NaN,
+        "youden_optimal_threshold": Infinity,
+        "youden_j_score": NaN,
+        "confusion_matrix": [
+          [
+            0,
+            0
+          ],
+          [
+            488,
+            3
+          ]
+        ],
+        "sample_count": 491,
+        "normal_count": 0,
+        "glaucoma_count": 491
+      },
+      "BEH": {
+        "accuracy": 0.7291666659071181,
+        "sensitivity": 0.0,
+        "specificity": 0.9999999985714286,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": 0.7703296703296704,
+        "youden_optimal_threshold": 0.0035659365821629763,
+        "youden_j_score": 0.589010989010989,
+        "confusion_matrix": [
+          [
+            70,
+            0
+          ],
+          [
+            26,
+            0
+          ]
+        ],
+        "sample_count": 96,
+        "normal_count": 70,
+        "glaucoma_count": 26
+      },
+      "CRFO": {
+        "accuracy": 0.4166666631944445,
+        "sensitivity": 0.0,
+        "specificity": 0.9999999800000003,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": 0.5285714285714286,
+        "youden_optimal_threshold": 0.003974275663495064,
+        "youden_j_score": 0.2571428571428571,
+        "confusion_matrix": [
+          [
+            5,
+            0
+          ],
+          [
+            7,
+            0
+          ]
+        ],
+        "sample_count": 12,
+        "normal_count": 5,
+        "glaucoma_count": 7
+      },
+      "DR-HAGIS": {
+        "accuracy": 0.0,
+        "sensitivity": 0.0,
+        "specificity": 0.0,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": NaN,
+        "youden_optimal_threshold": Infinity,
+        "youden_j_score": NaN,
+        "confusion_matrix": [
+          [
+            0,
+            0
+          ],
+          [
+            2,
+            0
+          ]
+        ],
+        "sample_count": 2,
+        "normal_count": 0,
+        "glaucoma_count": 2
+      },
+      "DRISHTI": {
+        "accuracy": 0.312499998046875,
+        "sensitivity": 0.0,
+        "specificity": 0.9999999800000003,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": 0.8,
+        "youden_optimal_threshold": 0.0031956241000443697,
+        "youden_j_score": 0.6181818181818182,
+        "confusion_matrix": [
+          [
+            5,
+            0
+          ],
+          [
+            11,
+            0
+          ]
+        ],
+        "sample_count": 16,
+        "normal_count": 5,
+        "glaucoma_count": 11
+      },
+      "FIVES": {
+        "accuracy": 0.6333333322777778,
+        "sensitivity": 0.0,
+        "specificity": 0.999999997368421,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": 0.7045454545454545,
+        "youden_optimal_threshold": 0.010439587756991386,
+        "youden_j_score": 0.39473684210526316,
+        "confusion_matrix": [
+          [
+            38,
+            0
+          ],
+          [
+            22,
+            0
+          ]
+        ],
+        "sample_count": 60,
+        "normal_count": 38,
+        "glaucoma_count": 22
+      },
+      "G1020": {
+        "accuracy": 0.7124183001879619,
+        "sensitivity": 0.0,
+        "specificity": 0.9999999990825689,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": 0.5815262718932444,
+        "youden_optimal_threshold": 0.0008658276055939496,
+        "youden_j_score": 0.19391159299416183,
+        "confusion_matrix": [
+          [
+            109,
+            0
+          ],
+          [
+            44,
+            0
+          ]
+        ],
+        "sample_count": 153,
+        "normal_count": 109,
+        "glaucoma_count": 44
+      },
+      "HRF": {
+        "accuracy": 0.7384615373254438,
+        "sensitivity": 0.0,
+        "specificity": 0.9999999979166666,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": 0.5330882352941176,
+        "youden_optimal_threshold": 0.007363015320152044,
+        "youden_j_score": 0.22794117647058826,
+        "confusion_matrix": [
+          [
+            48,
+            0
+          ],
+          [
+            17,
+            0
+          ]
+        ],
+        "sample_count": 65,
+        "normal_count": 48,
+        "glaucoma_count": 17
+      },
+      "JSIEC": {
+        "accuracy": 0.9999999833333336,
+        "sensitivity": 0.0,
+        "specificity": 0.9999999833333336,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": NaN,
+        "youden_optimal_threshold": Infinity,
+        "youden_j_score": NaN,
+        "confusion_matrix": [
+          [
+            6,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "sample_count": 6,
+        "normal_count": 6,
+        "glaucoma_count": 0
+      },
+      "LES-AV": {
+        "accuracy": 0.4999999875000003,
+        "sensitivity": 0.0,
+        "specificity": 0.9999999500000026,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": 1.0,
+        "youden_optimal_threshold": 0.008352289907634258,
+        "youden_j_score": 1.0,
+        "confusion_matrix": [
+          [
+            2,
+            0
+          ],
+          [
+            2,
+            0
+          ]
+        ],
+        "sample_count": 4,
+        "normal_count": 2,
+        "glaucoma_count": 2
+      },
+      "ODIR": {
+        "accuracy": 0.934032983368211,
+        "sensitivity": 0.0,
+        "specificity": 0.9999999998394864,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": 0.7052385816430761,
+        "youden_optimal_threshold": 0.0052758934907615185,
+        "youden_j_score": 0.384430176565008,
+        "confusion_matrix": [
+          [
+            623,
+            0
+          ],
+          [
+            44,
+            0
+          ]
+        ],
+        "sample_count": 667,
+        "normal_count": 623,
+        "glaucoma_count": 44
+      },
+      "ORIGA": {
+        "accuracy": 0.7448979584235735,
+        "sensitivity": 0.0,
+        "specificity": 0.9999999986301371,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": 0.6953424657534246,
+        "youden_optimal_threshold": 0.0026616647373884916,
+        "youden_j_score": 0.4208219178082192,
+        "confusion_matrix": [
+          [
+            73,
+            0
+          ],
+          [
+            25,
+            0
+          ]
+        ],
+        "sample_count": 98,
+        "normal_count": 73,
+        "glaucoma_count": 25
+      },
+      "PAPILA": {
+        "accuracy": 0.7936507923910304,
+        "sensitivity": 0.0,
+        "specificity": 0.999999998,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": 0.44461538461538463,
+        "youden_optimal_threshold": 0.0003436896950006485,
+        "youden_j_score": 0.21999999999999997,
+        "confusion_matrix": [
+          [
+            50,
+            0
+          ],
+          [
+            13,
+            0
+          ]
+        ],
+        "sample_count": 63,
+        "normal_count": 50,
+        "glaucoma_count": 13
+      },
+      "REFUGE": {
+        "accuracy": 0.8999999992500001,
+        "sensitivity": 0.0,
+        "specificity": 0.9999999990740741,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": 0.7885802469135803,
+        "youden_optimal_threshold": 0.0037036952562630177,
+        "youden_j_score": 0.5740740740740741,
+        "confusion_matrix": [
+          [
+            108,
+            0
+          ],
+          [
+            12,
+            0
+          ]
+        ],
+        "sample_count": 120,
+        "normal_count": 108,
+        "glaucoma_count": 12
+      }
+    },
+    "Vanilla_Scenario1_CE": {
+      "AIROGS": {
+        "accuracy": 0.9959266800415627,
+        "sensitivity": 0.9959266800415627,
+        "specificity": 0.0,
+        "precision": 0.999999999795501,
+        "f1_score": 0.9979591334700149,
+        "auc_roc": NaN,
+        "youden_optimal_threshold": Infinity,
+        "youden_j_score": NaN,
+        "confusion_matrix": [
+          [
+            0,
+            0
+          ],
+          [
+            2,
+            489
+          ]
+        ],
+        "sample_count": 491,
+        "normal_count": 0,
+        "glaucoma_count": 491
+      },
+      "BEH": {
+        "accuracy": 0.6666666659722222,
+        "sensitivity": 0.9615384578402366,
+        "specificity": 0.5571428563469388,
+        "precision": 0.44642857063137753,
+        "f1_score": 0.6097560527662136,
+        "auc_roc": 0.8796703296703297,
+        "youden_optimal_threshold": 0.5397778153419495,
+        "youden_j_score": 0.6043956043956045,
+        "confusion_matrix": [
+          [
+            39,
+            31
+          ],
+          [
+            1,
+            25
+          ]
+        ],
+        "sample_count": 96,
+        "normal_count": 70,
+        "glaucoma_count": 26
+      },
+      "CRFO": {
+        "accuracy": 0.5833333284722223,
+        "sensitivity": 0.8571428448979593,
+        "specificity": 0.19999999600000007,
+        "precision": 0.5999999940000001,
+        "f1_score": 0.7058822961937751,
+        "auc_roc": 0.7,
+        "youden_optimal_threshold": 0.9142290353775024,
+        "youden_j_score": 0.3714285714285714,
+        "confusion_matrix": [
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            6
+          ]
+        ],
+        "sample_count": 12,
+        "normal_count": 5,
+        "glaucoma_count": 7
+      },
+      "DR-HAGIS": {
+        "accuracy": 0.0,
+        "sensitivity": 0.0,
+        "specificity": 0.0,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": NaN,
+        "youden_optimal_threshold": Infinity,
+        "youden_j_score": NaN,
+        "confusion_matrix": [
+          [
+            0,
+            0
+          ],
+          [
+            2,
+            0
+          ]
+        ],
+        "sample_count": 2,
+        "normal_count": 0,
+        "glaucoma_count": 2
+      },
+      "DRISHTI": {
+        "accuracy": 0.812499994921875,
+        "sensitivity": 0.9090909008264464,
+        "specificity": 0.5999999880000002,
+        "precision": 0.833333326388889,
+        "f1_score": 0.8695651599243885,
+        "auc_roc": 0.8727272727272728,
+        "youden_optimal_threshold": 0.8491618037223816,
+        "youden_j_score": 0.6363636363636364,
+        "confusion_matrix": [
+          [
+            3,
+            2
+          ],
+          [
+            1,
+            10
+          ]
+        ],
+        "sample_count": 16,
+        "normal_count": 5,
+        "glaucoma_count": 11
+      },
+      "FIVES": {
+        "accuracy": 0.5333333324444445,
+        "sensitivity": 0.8636363597107438,
+        "specificity": 0.3421052622576177,
+        "precision": 0.43181818083677687,
+        "f1_score": 0.5757575295684147,
+        "auc_roc": 0.7488038277511961,
+        "youden_optimal_threshold": 0.6607198715209961,
+        "youden_j_score": 0.5023923444976077,
+        "confusion_matrix": [
+          [
+            13,
+            25
+          ],
+          [
+            3,
+            19
+          ]
+        ],
+        "sample_count": 60,
+        "normal_count": 38,
+        "glaucoma_count": 22
+      },
+      "G1020": {
+        "accuracy": 0.4117647056132257,
+        "sensitivity": 0.7045454529442149,
+        "specificity": 0.29357798138203856,
+        "precision": 0.287037036771262,
+        "f1_score": 0.40789469516967175,
+        "auc_roc": 0.49478732276897414,
+        "youden_optimal_threshold": 0.46342411637306213,
+        "youden_j_score": 0.09299416180150122,
+        "confusion_matrix": [
+          [
+            32,
+            77
+          ],
+          [
+            13,
+            31
+          ]
+        ],
+        "sample_count": 153,
+        "normal_count": 109,
+        "glaucoma_count": 44
+      },
+      "HRF": {
+        "accuracy": 0.7384615373254438,
+        "sensitivity": 0.7647058778546713,
+        "specificity": 0.7291666651475694,
+        "precision": 0.4999999980769231,
+        "f1_score": 0.6046511121687436,
+        "auc_roc": 0.8615196078431372,
+        "youden_optimal_threshold": 0.6835748553276062,
+        "youden_j_score": 0.6053921568627452,
+        "confusion_matrix": [
+          [
+            35,
+            13
+          ],
+          [
+            4,
+            13
+          ]
+        ],
+        "sample_count": 65,
+        "normal_count": 48,
+        "glaucoma_count": 17
+      },
+      "JSIEC": {
+        "accuracy": 0.9999999833333336,
+        "sensitivity": 0.0,
+        "specificity": 0.9999999833333336,
+        "precision": 0.0,
+        "f1_score": 0.0,
+        "auc_roc": NaN,
+        "youden_optimal_threshold": Infinity,
+        "youden_j_score": NaN,
+        "confusion_matrix": [
+          [
+            6,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "sample_count": 6,
+        "normal_count": 6,
+        "glaucoma_count": 0
+      },
+      "LES-AV": {
+        "accuracy": 0.7499999812500004,
+        "sensitivity": 0.9999999500000026,
+        "specificity": 0.4999999750000013,
+        "precision": 0.6666666444444452,
+        "f1_score": 0.7999999200000041,
+        "auc_roc": 1.0,
+        "youden_optimal_threshold": 0.9849591851234436,
+        "youden_j_score": 1.0,
+        "confusion_matrix": [
+          [
+            1,
+            1
+          ],
+          [
+            0,
+            2
+          ]
+        ],
+        "sample_count": 4,
+        "normal_count": 2,
+        "glaucoma_count": 2
+      },
+      "ODIR": {
+        "accuracy": 0.8260869563978881,
+        "sensitivity": 0.818181816322314,
+        "specificity": 0.8266452647148242,
+        "precision": 0.2499999998263889,
+        "f1_score": 0.3829786871435072,
+        "auc_roc": 0.8522909674595068,
+        "youden_optimal_threshold": 0.6270740628242493,
+        "youden_j_score": 0.6670436305267766,
+        "confusion_matrix": [
+          [
+            515,
+            108
+          ],
+          [
+            8,
+            36
+          ]
+        ],
+        "sample_count": 667,
+        "normal_count": 623,
+        "glaucoma_count": 44
+      },
+      "ORIGA": {
+        "accuracy": 0.35714285677842567,
+        "sensitivity": 0.999999996,
+        "specificity": 0.13698630118221056,
+        "precision": 0.2840909087680785,
+        "f1_score": 0.44247784086459657,
+        "auc_roc": 0.7320547945205479,
+        "youden_optimal_threshold": 0.9518033862113953,
+        "youden_j_score": 0.39232876712328774,
+        "confusion_matrix": [
+          [
+            10,
+            63
+          ],
+          [
+            0,
+            25
+          ]
+        ],
+        "sample_count": 98,
+        "normal_count": 73,
+        "glaucoma_count": 25
+      },
+      "PAPILA": {
+        "accuracy": 0.5079365071302595,
+        "sensitivity": 0.6923076869822486,
+        "specificity": 0.45999999908,
+        "precision": 0.24999999930555555,
+        "f1_score": 0.36734689829238226,
+        "auc_roc": 0.6553846153846155,
+        "youden_optimal_threshold": 0.8507648706436157,
+        "youden_j_score": 0.34461538461538466,
+        "confusion_matrix": [
+          [
+            23,
+            27
+          ],
+          [
+            4,
+            9
+          ]
+        ],
+        "sample_count": 63,
+        "normal_count": 50,
+        "glaucoma_count": 13
+      },
+      "REFUGE": {
+        "accuracy": 0.9166666659027778,
+        "sensitivity": 0.833333326388889,
+        "specificity": 0.9259259250685872,
+        "precision": 0.5555555524691358,
+        "f1_score": 0.6666666142222257,
+        "auc_roc": 0.9506172839506173,
+        "youden_optimal_threshold": 0.4040600657463074,
+        "youden_j_score": 0.8148148148148148,
+        "confusion_matrix": [
+          [
+            100,
+            8
+          ],
+          [
+            2,
+            10
+          ]
+        ],
+        "sample_count": 120,
+        "normal_count": 108,
+        "glaucoma_count": 12
+      }
+    }
+  }
+}

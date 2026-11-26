@@ -25,6 +25,7 @@ from src.models import VanillaDUNet, HybridDUNet, ThreeBranchResNet50
 from src.losses import FocalLoss
 from src.dataset.smdg_dataset import get_dataloaders
 from src.utils.metrics import compute_classification_metrics
+from src.utils.roi_crop import crop_od_roi
 
 
 def get_device(preferred: str = "auto") -> torch.device:
@@ -92,7 +93,7 @@ def load_segmentation_models(variant: str, seg_dir: str, device: torch.device, s
     return model_od, model_vessel
 
 
-def train_one_epoch_detector(detector, model_od, model_vessel, loader, optimizer, criterion, device):
+def train_one_epoch_detector(detector, model_od, model_vessel, loader, optimizer, criterion, device, use_od_roi_crop: bool = True):
     detector.train()
     total_loss = 0.0
 
@@ -109,8 +110,8 @@ def train_one_epoch_detector(detector, model_od, model_vessel, loader, optimizer
             M_od = (prob_od > 0.5).float()
             M_vessel = (prob_vessel > 0.5).float()
 
-            # Perkalian elementwise POST-02
-            I_od = I_orig * M_od
+            # Perkalian elementwise & Square Tight ROI Cropping untuk Optic Disc (fix3)
+            I_od = crop_od_roi(I_orig, M_od) if use_od_roi_crop else (I_orig * M_od)
             I_vessel = I_orig * M_vessel
 
         # Stage 2: Three-Branch ResNet50
@@ -125,7 +126,7 @@ def train_one_epoch_detector(detector, model_od, model_vessel, loader, optimizer
     return total_loss / len(loader.dataset)
 
 
-def validate_detector(detector, model_od, model_vessel, loader, criterion, device):
+def validate_detector(detector, model_od, model_vessel, loader, criterion, device, use_od_roi_crop: bool = True):
     detector.eval()
     total_loss = 0.0
     all_probs = []
@@ -142,7 +143,7 @@ def validate_detector(detector, model_od, model_vessel, loader, criterion, devic
             M_od = (prob_od > 0.5).float()
             M_vessel = (prob_vessel > 0.5).float()
 
-            I_od = I_orig * M_od
+            I_od = crop_od_roi(I_orig, M_od) if use_od_roi_crop else (I_orig * M_od)
             I_vessel = I_orig * M_vessel
 
             logits = detector(I_orig, I_od, I_vessel)
@@ -174,7 +175,8 @@ def train_detection(
     apply_imagenet_norm: bool = False,
     device_pref: str = "auto",
     output_dir: str = "checkpoints/detection",
-    subset: str = "all"
+    subset: str = "all",
+    use_od_roi_crop: bool = True
 ):
     device = get_device(device_pref)
     output_path = Path(output_dir)
@@ -208,6 +210,7 @@ def train_detection(
     print(f"   - Focal Loss Config : gamma={gamma}, alpha={alpha_str}")
     print(f"   - Device            : {device}")
     print(f"   - Epochs            : {epochs} | Batch Size: {batch_size} | LR: {lr}")
+    print(f"   - OD ROI Cropping   : {'ENABLED (1:1 Tight Square)' if use_od_roi_crop else 'DISABLED (Full Canvas Mask)'}")
 
     # 2. Muat Data
     train_loader, val_loader, test_loader, _ = get_dataloaders(
@@ -241,8 +244,8 @@ def train_detection(
     best_ckpt = output_path / f"best_{tag}.pth"
 
     for epoch in range(1, epochs + 1):
-        train_loss = train_one_epoch_detector(detector, model_od, model_vessel, train_loader, optimizer, criterion, device)
-        val_metrics = validate_detector(detector, model_od, model_vessel, val_loader, criterion, device)
+        train_loss = train_one_epoch_detector(detector, model_od, model_vessel, train_loader, optimizer, criterion, device, use_od_roi_crop=use_od_roi_crop)
+        val_metrics = validate_detector(detector, model_od, model_vessel, val_loader, criterion, device, use_od_roi_crop=use_od_roi_crop)
         scheduler.step()
 
         val_auc = val_metrics["auc_roc"]
@@ -259,6 +262,7 @@ def train_detection(
                 "sc_name": sc_name,
                 "gamma": gamma,
                 "alpha": alpha,
+                "use_od_roi_crop": use_od_roi_crop,
                 "model_state_dict": detector.state_dict(),
                 "best_auc": best_auc,
                 "val_metrics": val_metrics
@@ -292,7 +296,7 @@ def train_detection(
     print(f"\n🔍 Menjalankan Evaluasi Independen pada Test Set...")
     best_checkpoint = torch.load(best_ckpt, map_location=device)
     detector.load_state_dict(best_checkpoint["model_state_dict"])
-    test_metrics = validate_detector(detector, model_od, model_vessel, test_loader, criterion, device)
+    test_metrics = validate_detector(detector, model_od, model_vessel, test_loader, criterion, device, use_od_roi_crop=use_od_roi_crop)
 
     test_log_path = output_path / f"test_metrics_{tag}.json"
     with open(test_log_path, "w") as f:
@@ -340,6 +344,8 @@ def main():
     parser.add_argument("--device", choices=["auto", "cuda", "mps", "cpu"], default="auto")
     parser.add_argument("--output-dir", default="checkpoints/detection")
     parser.add_argument("--subset", default="all", help="Subset dataset untuk Head-to-Head (contoh: refuge, all)")
+    parser.add_argument("--no-od-roi-crop", action="store_false", dest="use_od_roi_crop", help="Matikan tight square ROI cropping pada cabang Optic Disc")
+    parser.set_defaults(use_od_roi_crop=True)
     args = parser.parse_args()
 
     train_detection(
@@ -354,7 +360,8 @@ def main():
         apply_imagenet_norm=args.apply_imagenet_norm,
         device_pref=args.device,
         output_dir=args.output_dir,
-        subset=args.subset
+        subset=args.subset,
+        use_od_roi_crop=args.use_od_roi_crop
     )
 
 

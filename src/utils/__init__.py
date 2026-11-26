@@ -6,6 +6,7 @@ from .visualizer import (
     save_branch_attribution_boxplot
 )
 from .xai import ClosedFormBranchAttribution, MultiBranchGradCAM, ClinicalAuditor
+from .roi_crop import crop_od_roi
 
 __all__ = [
     "compute_segmentation_metrics",
@@ -16,5 +17,6 @@ __all__ = [
     "save_branch_attribution_boxplot",
     "ClosedFormBranchAttribution",
     "MultiBranchGradCAM",
-    "ClinicalAuditor"
+    "ClinicalAuditor",
+    "crop_od_roi"
 ]

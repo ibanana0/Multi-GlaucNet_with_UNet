@@ -29,8 +29,10 @@ matplotlib.use("Agg")
 
 from src.models import VanillaDUNet, HybridDUNet, ThreeBranchResNet50
 from src.dataset.smdg_dataset import get_dataloaders
+from src.dataset.master_split import get_dataset_origin
 from src.utils.xai import ClosedFormBranchAttribution, MultiBranchGradCAM, ClinicalAuditor
 from src.utils.visualizer import save_gradcam_multibranch_plot, save_branch_attribution_boxplot
+from src.utils.roi_crop import crop_od_roi
 
 
 def get_device(preferred: str = "auto") -> torch.device:
@@ -57,9 +59,14 @@ def find_default_dataset_paths() -> tuple:
     return str(candidates[0][0]), str(candidates[0][1])
 
 
-def find_default_checkpoints(seg_variant: str, seg_dir: Path, det_dir: Path) -> Tuple[Path, Path, Path]:
-    """Mendeteksi checkpoint segmentasi dan deteksi default yang tersedia."""
+def find_default_checkpoints(seg_variant: str, seg_dir: Path, det_dir: Path) -> Tuple[Path, Path, Path, Path]:
+    """Mendeteksi checkpoint segmentasi (OD, OC, Vessel) dan deteksi default yang tersedia."""
     od_ckpt = seg_dir / f"best_{seg_variant}_od.pth"
+    oc_candidates = [
+        seg_dir / f"best_{seg_variant}_oc.pth",
+        seg_dir / "best_hybrid_oc.pth"
+    ]
+    oc_ckpt = next((c for c in oc_candidates if c.exists()), oc_candidates[0])
     vessel_ckpt = seg_dir / f"best_{seg_variant}_vessel.pth"
 
     det_candidates = [
@@ -72,7 +79,7 @@ def find_default_checkpoints(seg_variant: str, seg_dir: Path, det_dir: Path) -> 
         det_dir / "best_detector_vanilla_sc2.pth"
     ]
     det_ckpt = next((c for c in det_candidates if c.exists()), det_candidates[0])
-    return od_ckpt, vessel_ckpt, det_ckpt
+    return od_ckpt, oc_ckpt, vessel_ckpt, det_ckpt
 
 
 def run_xai_evaluation(args):
@@ -103,13 +110,15 @@ def run_xai_evaluation(args):
     print(f"   Total Sampel Test Set: {total_test_samples} citra.")
 
     # 2. Muat Checkpoint Model
-    print("\n📦 [2/4] Memuat Model Tahap 1 (DUNet) & Tahap 2 (Three-Branch ResNet-50)...")
-    default_od, default_vessel, default_det = find_default_checkpoints(args.seg_variant, seg_dir, det_dir)
+    print("\n📦 [2/4] Memuat Model Tahap 1 (DUNet OD, OC, Vessel) & Tahap 2 (Three-Branch ResNet-50)...")
+    default_od, default_oc, default_vessel, default_det = find_default_checkpoints(args.seg_variant, seg_dir, det_dir)
     od_ckpt = Path(args.od_ckpt) if args.od_ckpt else default_od
+    oc_ckpt = Path(args.oc_ckpt) if args.oc_ckpt else default_oc
     vessel_ckpt = Path(args.vessel_ckpt) if args.vessel_ckpt else default_vessel
     det_ckpt = Path(args.detector_ckpt) if args.detector_ckpt else default_det
 
     print(f"   OD Checkpoint    : {od_ckpt.name} ({'Found' if od_ckpt.exists() else 'NOT FOUND'})")
+    print(f"   OC Checkpoint    : {oc_ckpt.name} ({'Found' if oc_ckpt.exists() else 'NOT FOUND'})")
     print(f"   Vessel Checkpoint: {vessel_ckpt.name} ({'Found' if vessel_ckpt.exists() else 'NOT FOUND'})")
     print(f"   Detector Checkpoint: {det_ckpt.name} ({'Found' if det_ckpt.exists() else 'NOT FOUND'})")
 
@@ -121,6 +130,16 @@ def run_xai_evaluation(args):
         model_od = HybridDUNet(in_channels=3, out_classes=1, backbone="resnet50")
         model_vessel = HybridDUNet(in_channels=3, out_classes=1, backbone="resnet50")
 
+    # Model Optic Cup (untuk ekstraksi biomarker vCDR pada Pilar 3)
+    model_oc = None
+    if oc_ckpt.exists():
+        if "vanilla" in oc_ckpt.name:
+            model_oc = VanillaDUNet(in_channels=3, out_classes=1)
+        else:
+            model_oc = HybridDUNet(in_channels=3, out_classes=1, backbone="resnet50")
+        model_oc.load_state_dict(torch.load(oc_ckpt, map_location=device)["model_state_dict"])
+        model_oc = model_oc.to(device).eval()
+
     if od_ckpt.exists():
         model_od.load_state_dict(torch.load(od_ckpt, map_location=device)["model_state_dict"])
     if vessel_ckpt.exists():
@@ -131,11 +150,18 @@ def run_xai_evaluation(args):
 
     # Inisialisasi Model Deteksi
     detector = ThreeBranchResNet50(num_classes=2, pretrained=False, fusion_method="average")
+    det_data = {}
     if det_ckpt.exists():
         det_data = torch.load(det_ckpt, map_location=device)
         state_dict = det_data["model_state_dict"] if "model_state_dict" in det_data else det_data
         detector.load_state_dict(state_dict)
     detector = detector.to(device).eval()
+
+    if args.od_roi_crop is not None:
+        use_od_roi_crop = args.od_roi_crop
+    else:
+        use_od_roi_crop = bool(det_data.get("use_od_roi_crop", False))
+    print(f"   OD ROI Cropping  : {'ENABLED (1:1 Tight Square)' if use_od_roi_crop else 'DISABLED (Full Canvas Mask)'}")
 
     # 3. Eksekusi Pilar 1: Closed-Form Branch Attribution (Cohort Global)
     print("\n⚖️ [3/4] Menjalankan Pilar 1: Closed-Form Branch Attribution pada Test Set...")
@@ -152,13 +178,17 @@ def run_xai_evaluation(args):
             image_ids = batch.get("image_id", [str(i) for i in range(I_orig.size(0))])
             datasets = batch.get("dataset", ["Unknown"] * I_orig.size(0))
 
-            # Segmentasi OD dan Vessel
+            # Segmentasi OD, OC, dan Vessel
             prob_od = model_od(I_orig)
             prob_vessel = model_vessel(I_orig)
             M_od = (prob_od > 0.5).float()
             M_vessel = (prob_vessel > 0.5).float()
+            M_oc = (model_oc(I_orig) > 0.5).float() if model_oc is not None else None
 
-            I_od = I_orig * M_od
+            # Ekstraksi Biomarker Klinis (vCDR, aCDR, Vessel Density)
+            biomarkers = ClinicalAuditor.extract_clinical_biomarkers(I_orig, M_od, M_oc, M_vessel)
+
+            I_od = crop_od_roi(I_orig, M_od) if use_od_roi_crop else (I_orig * M_od)
             I_vessel = I_orig * M_vessel
 
             # Prediksi dan atribusi tertutup
@@ -172,14 +202,29 @@ def run_xai_evaluation(args):
                 p_val = float(probs[i].item())
                 y_val = int(targets[i].item())
                 pred_label = 1 if p_val >= 0.5 else 0
+                img_id = image_ids[i] if isinstance(image_ids, list) else str(image_ids[i])
+                ds_name = get_dataset_origin(img_id)
+
+                if y_val == 1 and pred_label == 1:
+                    cm_group = "TP"
+                elif y_val == 0 and pred_label == 0:
+                    cm_group = "TN"
+                elif y_val == 0 and pred_label == 1:
+                    cm_group = "FP"
+                else:
+                    cm_group = "FN"
 
                 rec = {
-                    "image_id": image_ids[i] if isinstance(image_ids, list) else str(image_ids[i]),
-                    "dataset": datasets[i] if isinstance(datasets, list) else str(datasets[i]),
+                    "image_id": img_id,
+                    "dataset": ds_name,
                     "true_label": y_val,
                     "pred_prob": p_val,
                     "pred_label": pred_label,
+                    "cm_group": cm_group,
                     "is_correct": bool(pred_label == y_val),
+                    "vcdr": biomarkers["vcdr"][i],
+                    "acdr": biomarkers["acdr"][i],
+                    "vessel_density": biomarkers["vessel_density"][i],
                     "S_orig": float(attr["S_orig"][i].item()),
                     "S_od": float(attr["S_od"][i].item()),
                     "S_vessel": float(attr["S_vessel"][i].item()),
@@ -198,6 +243,8 @@ def run_xai_evaluation(args):
                         "true_label": y_val,
                         "pred_prob": p_val,
                         "pred_label": pred_label,
+                        "vcdr": rec["vcdr"],
+                        "vessel_density": rec["vessel_density"],
                         "I_orig": I_orig[i:i+1].cpu(),
                         "I_od": I_od[i:i+1].cpu(),
                         "I_vessel": I_vessel[i:i+1].cpu()
@@ -239,7 +286,8 @@ def run_xai_evaluation(args):
         I_d = sample["I_od"].to(device)
         I_v = sample["I_vessel"].to(device)
 
-        cams = gradcam_engine.generate_cam(I_o, I_d, I_v, target_class=1)
+        # Jelaskan kelas yang diprediksi model (Glaukoma utk TP/FP, Normal utk TN/FN)
+        cams = gradcam_engine.generate_cam(I_o, I_d, I_v, target_class=sample["pred_label"])
 
         # Audit anti-shortcut boundary energy
         orig_audit = ClinicalAuditor.audit_retinal_boundary_energy(cams["orig"])
@@ -249,6 +297,8 @@ def run_xai_evaluation(args):
         audit_results.append({
             "category": category,
             "image_id": sample["image_id"],
+            "vcdr": sample["vcdr"],
+            "vessel_density": sample["vessel_density"],
             "orig_inside_pct": orig_audit["inside_energy_ratio"],
             "od_inside_pct": od_audit["inside_energy_ratio"],
             "vessel_inside_pct": vessel_audit["inside_energy_ratio"],
@@ -265,6 +315,7 @@ def run_xai_evaluation(args):
             "image_id": sample["image_id"],
             "prob": sample["pred_prob"],
             "true_label": sample["true_label"],
+            "vcdr": sample["vcdr"],
             "I_orig": to_hwc(sample["I_orig"]),
             "I_od": to_hwc(sample["I_od"]),
             "I_vessel": to_hwc(sample["I_vessel"]),
@@ -332,9 +383,19 @@ def _generate_attribution_markdown_summary(df: pd.DataFrame, out_path: Path):
     if len(glaucoma_df) > 0:
         md.append(f"| Kohort Glaukoma (N={len(glaucoma_df)}) | {glaucoma_df['pct_orig'].mean():.2f} ± {glaucoma_df['pct_orig'].std():.2f}% | **{glaucoma_df['pct_od'].mean():.2f} ± {glaucoma_df['pct_od'].std():.2f}%** | {glaucoma_df['pct_vessel'].mean():.2f} ± {glaucoma_df['pct_vessel'].std():.2f}% |")
 
-    md.append("\n## 2. Analisis Signifikansi Klinis")
-    md.append("- **Peranan Biomarker Optic Disc**: Cabang Optic Disc secara konsisten menyumbang dorongan logit yang signifikan pada mata glaukoma, membuktikan bahwa fitur morfologi diskus dan mangkuk optik merupakan tumpuan utama model.")
-    md.append("- **Peranan Biomarker Vaskular**: Cabang pembuluh darah memberikan informasi komplementer terhadap pola arsitektur retina.")
+    md.append("\n## 2. Analisis Kontribusi Cabang Berdasarkan Ketepatan Prediksi")
+    correct_df = df[df["is_correct"] == True]
+    wrong_df = df[df["is_correct"] == False]
+    if len(correct_df) > 0 and len(wrong_df) > 0:
+        md.append(f"- **Prediksi Benar (N={len(correct_df)}):** Orig `{correct_df['pct_orig'].mean():.2f}%` | OD `{correct_df['pct_od'].mean():.2f}%` | Vessel `{correct_df['pct_vessel'].mean():.2f}%`")
+        md.append(f"- **Salah Klasifikasi / Misclassification (N={len(wrong_df)}):** Orig `{wrong_df['pct_orig'].mean():.2f}%` | OD `{wrong_df['pct_od'].mean():.2f}%` | Vessel `{wrong_df['pct_vessel'].mean():.2f}%`")
+
+    dominant_branch = max(
+        [("Citra Asli", mean_orig), ("Optic Disc", mean_od), ("Pembuluh Darah", mean_vessel)],
+        key=lambda x: x[1]
+    )[0]
+    md.append("\n## 3. Kesimpulan Atribusi Aditif")
+    md.append(f"- **Cabang Dominan**: Cabang **{dominant_branch}** memberikan kontribusi logit rata-rata terbesar pada lapisan fusi linier.")
     md.append("- **Sifat Dekomposisi Eksak**: Karena dihitung langsung dari sifat distributif aljabar linier, nilai atribusi bebas dari galat aproksimasi sampling (*zero estimation error*).")
 
     with open(out_path, "w", encoding="utf-8") as f:
@@ -342,29 +403,61 @@ def _generate_attribution_markdown_summary(df: pd.DataFrame, out_path: Path):
 
 
 def _generate_clinical_audit_markdown(audit_results: List[Dict], df_attr: pd.DataFrame, out_path: Path):
-    """Menghasilkan laporan audit klinis dan anti-shortcut untuk Pilar 3."""
+    """Menghasilkan laporan audit klinis, biomarker vCDR/Vessel, analisis misclassification, dan anti-shortcut (Pilar 3)."""
     md = []
-    md.append("# Laporan Audit Klinis & Anti-Shortcut Learning (Pilar 3)")
-    md.append("\nAudit keterandalan medis memverifikasi bahwa model membuat keputusan diagnostik berbasis penanda biologis retina dan bukan artefak akuisisi citra (misal batas lingkaran kamera atau noise sudut).")
+    md.append("# Laporan Audit Klinis, Biomarker Medis, & Anti-Shortcut Learning (Pilar 3)")
+    md.append("\nAudit memverifikasi keselarasan keputusan model dengan biomarker klinis oftalmologi (vCDR, aCDR, Vessel Density) serta menguji integritas atensi retina (anti-shortcut).")
 
-    md.append("\n## 1. Audit Retinal Boundary Energy (Anti-Shortcut)")
-    md.append("Target: Minimal 85.0% energi atensi Grad-CAM harus berada di dalam lingkaran anatomi retina.\n")
-    md.append("| Kategori Kasus | Image ID | Retinal Energy (Orig) | Retinal Energy (OD) | Retinal Energy (Vessel) | Status Audit |")
-    md.append("|---|---|---|---|---|---|")
+    md.append("\n## 1. Audit Retinal Boundary Energy & Biomarker Sampel Representatif (Grad-CAM)")
+    md.append("Target: Minimal 85.0% energi atensi Grad-CAM berada di dalam lingkaran anatomi retina (dievaluasi terhadap kelas prediksi model).\n")
+    md.append("| Kategori Kasus | Image ID | vCDR | Vessel Density | Energy (Orig) | Energy (OD) | Energy (Vessel) | Status Audit |")
+    md.append("|---|---|---:|---:|---:|---:|---:|---|")
 
     all_passed = True
     for a in audit_results:
         status_str = "✅ LOLOS" if a["passes_all"] else "⚠️ PERHATIAN"
         if not a["passes_all"]:
             all_passed = False
-        md.append(f"| {a['category']} | `{a['image_id']}` | {a['orig_inside_pct']:.1f}% | {a['od_inside_pct']:.1f}% | {a['vessel_inside_pct']:.1f}% | {status_str} |")
+        vcdr_s = f"{a['vcdr']:.2f}" if np.isfinite(a.get("vcdr", float("nan"))) else "N/A"
+        vd_s = f"{a['vessel_density']:.2f}%" if np.isfinite(a.get("vessel_density", float("nan"))) else "N/A"
+        md.append(f"| {a['category']} | `{a['image_id']}` | {vcdr_s} | {vd_s} | {a['orig_inside_pct']:.1f}% | {a['od_inside_pct']:.1f}% | {a['vessel_inside_pct']:.1f}% | {status_str} |")
 
-    md.append("\n## 2. Kesimpulan Integritas Model")
+    md.append("\n## 2. Analisis Kuantitatif Misclassification & Biomarker Medis (Seluruh Test Set)")
+    md.append("Membandingkan profil biomarker klinis dan atribusi cabang pada keempat kuadran hasil prediksi (**TP, TN, FP, FN**):\n")
+    md.append("| Kuadran | N | vCDR (Mean ± Std) | aCDR (Mean ± Std) | Vessel Density (%) | Orig (%) | OD (%) | Vessel (%) |")
+    md.append("|---|---:|---:|---:|---:|---:|---:|---:|")
+
+    for grp in ["TP", "TN", "FP", "FN"]:
+        sub = df_attr[df_attr["cm_group"] == grp]
+        if len(sub) == 0:
+            continue
+        v_m, v_s = sub["vcdr"].mean(), sub["vcdr"].std()
+        a_m, a_s = sub["acdr"].mean(), sub["acdr"].std()
+        vd_m, vd_s = sub["vessel_density"].mean(), sub["vessel_density"].std()
+        md.append(
+            f"| **{grp}** | {len(sub)} | {v_m:.3f} ± {v_s:.3f} | {a_m:.3f} ± {a_s:.3f} | "
+            f"{vd_m:.2f} ± {vd_s:.2f}% | {sub['pct_orig'].mean():.1f}% | {sub['pct_od'].mean():.1f}% | {sub['pct_vessel'].mean():.1f}% |"
+        )
+
+    md.append("\n## 3. Uji Korelasi Statistik Biomarker Klinis vs Model")
+    corr_vcdr_prob = ClinicalAuditor.compute_clinical_correlations(df_attr["vcdr"].values, df_attr["pred_prob"].values)
+    corr_vcdr_sod = ClinicalAuditor.compute_clinical_correlations(df_attr["vcdr"].values, df_attr["S_od"].values)
+    corr_vd_prob = ClinicalAuditor.compute_clinical_correlations(df_attr["vessel_density"].values, df_attr["pred_prob"].values)
+    corr_vd_svess = ClinicalAuditor.compute_clinical_correlations(df_attr["vessel_density"].values, df_attr["S_vessel"].values)
+
+    md.append("| Pasangan Uji Korelasi | Pearson $r$ | $p$-value (Pearson) | Spearman $\\rho$ | $p$-value (Spearman) |")
+    md.append("|---|---:|---:|---:|---:|")
+    md.append(f"| **vCDR vs Probabilitas Glaukoma (`pred_prob`)** | {corr_vcdr_prob['pearson_r']:.4f} | {corr_vcdr_prob['pearson_p']:.2e} | {corr_vcdr_prob['spearman_rho']:.4f} | {corr_vcdr_prob['spearman_p']:.2e} |")
+    md.append(f"| vCDR vs Kontribusi Logit OD (`S_od`) | {corr_vcdr_sod['pearson_r']:.4f} | {corr_vcdr_sod['pearson_p']:.2e} | {corr_vcdr_sod['spearman_rho']:.4f} | {corr_vcdr_sod['spearman_p']:.2e} |")
+    md.append(f"| Vessel Density vs Probabilitas Glaukoma (`pred_prob`) | {corr_vd_prob['pearson_r']:.4f} | {corr_vd_prob['pearson_p']:.2e} | {corr_vd_prob['spearman_rho']:.4f} | {corr_vd_prob['spearman_p']:.2e} |")
+    md.append(f"| Vessel Density vs Kontribusi Logit Vessel (`S_vessel`) | {corr_vd_svess['pearson_r']:.4f} | {corr_vd_svess['pearson_p']:.2e} | {corr_vd_svess['spearman_rho']:.4f} | {corr_vd_svess['spearman_p']:.2e} |")
+
+    md.append("\n## 4. Kesimpulan Integritas Klinis")
     if all_passed:
         md.append("- **Status Anti-Shortcut**: **100% Lolos Audit**. Seluruh energi aktivasi Grad-CAM terpusat pada struktur vaskular dan diskus saraf optik di dalam retina.")
     else:
         md.append("- **Status Anti-Shortcut**: Sebagian besar energi aktivasi berada di dalam retina, dengan sedikit difusi pada citra bersudut tajam.")
-    md.append("- **Validasi Kaidah Medis**: Model berhasil mengeliminasi efek *blackbox* melalui verifikasi ganda: persentase kontribusi aljabar eksak (Pilar 1), peta atensi spasial Grad-CAM (Pilar 2), dan audit energi anatomi (Pilar 3).")
+    md.append("- **Validasi Medis**: Tabel kuadran TP/TN/FP/FN dan uji korelasi vCDR menyediakan bukti kuantitatif apakah kesalahan prediksi terjadi akibat kasus klinis ambigu (*physiological large cupping* pada FP / stadium dini tanpa *cupping* pada FN) atau karena keterbatasan fitur model.")
 
     with open(out_path, "w", encoding="utf-8") as f:
         f.write("\n".join(md))
@@ -381,11 +474,14 @@ def main():
     parser.add_argument("--det-dir", default=str(PROJECT_ROOT / "checkpoints/detection"), help="Direktori checkpoint deteksi")
     parser.add_argument("--seg-variant", choices=["vanilla", "hybrid"], default="hybrid", help="Varian model DUNet")
     parser.add_argument("--od-ckpt", default=None, help="Path spesifik checkpoint OD (opsional)")
+    parser.add_argument("--oc-ckpt", default=None, help="Path spesifik checkpoint Optic Cup (opsional)")
     parser.add_argument("--vessel-ckpt", default=None, help="Path spesifik checkpoint Vessel (opsional)")
     parser.add_argument("--detector-ckpt", default=None, help="Path spesifik checkpoint ThreeBranchResNet50 (opsional)")
     parser.add_argument("--output-dir", default=str(PROJECT_ROOT / "results/xai"), help="Direktori luaran XAI")
     parser.add_argument("--subset", default="all", help="Subset dataset filter (contoh: refuge, all)")
     parser.add_argument("--sample-limit", type=int, default=None, help="Batas maksimal sampel untuk uji cepat")
+    parser.add_argument("--od-roi-crop", action="store_true", dest="od_roi_crop", default=None, help="Paksa aktifkan tight square ROI cropping pada cabang OD")
+    parser.add_argument("--no-od-roi-crop", action="store_false", dest="od_roi_crop", help="Paksa matikan tight square ROI cropping pada cabang OD")
     args = parser.parse_args()
 
     run_xai_evaluation(args)

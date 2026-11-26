@@ -28,6 +28,7 @@ os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 from src.models import VanillaDUNet, HybridDUNet, ThreeBranchResNet50
 from src.dataset.smdg_dataset import get_dataloaders
 from src.utils.metrics import compute_segmentation_metrics, compute_classification_metrics
+from src.utils.roi_crop import crop_od_roi
 from src.utils.visualizer import (
     save_segmentation_prediction_plot,
     save_contour_overlay_plot,
@@ -188,6 +189,7 @@ def evaluate_detector_model(
     det_ckpt = torch.load(ckpt_path, map_location=device)
     detector.load_state_dict(det_ckpt["model_state_dict"])
     detector = detector.to(device).eval()
+    use_od_roi_crop = bool(det_ckpt.get("use_od_roi_crop", False))
 
     all_probs = []
     all_targets = []
@@ -204,7 +206,7 @@ def evaluate_detector_model(
             M_od = (prob_od > 0.5).float()
             M_vessel = (prob_vessel > 0.5).float()
 
-            I_od = I_orig * M_od
+            I_od = crop_od_roi(I_orig, M_od) if use_od_roi_crop else (I_orig * M_od)
             I_vessel = I_orig * M_vessel
 
             logits = detector(I_orig, I_od, I_vessel)

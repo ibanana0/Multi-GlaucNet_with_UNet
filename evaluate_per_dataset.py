@@ -20,6 +20,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.models import VanillaDUNet, HybridDUNet, ThreeBranchResNet50
 from src.dataset.smdg_dataset import get_dataloaders
 from src.utils.metrics import compute_segmentation_metrics, compute_classification_metrics
+from src.utils.roi_crop import crop_od_roi
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 CSV_PATH = PROJECT_ROOT / "../dataset/smdg-19/archive/metadata - standardized.csv"
@@ -117,6 +118,7 @@ def evaluate_detector_breakdown(tag: str, ckpt_path: str, seg_variant: str, seg_
     det_ckpt = torch.load(ckpt_path, map_location=DEVICE)
     detector.load_state_dict(det_ckpt["model_state_dict"])
     detector = detector.to(DEVICE).eval()
+    use_od_roi_crop = bool(det_ckpt.get("use_od_roi_crop", False))
 
     _, _, test_loader, _ = get_dataloaders(
         csv_path=str(CSV_PATH),
@@ -137,7 +139,7 @@ def evaluate_detector_breakdown(tag: str, ckpt_path: str, seg_variant: str, seg_
             m_od = (torch.sigmoid(model_od(images)) > 0.5).float()
             m_vessel = (torch.sigmoid(model_vessel(images)) > 0.5).float()
 
-            i_od = images * m_od
+            i_od = crop_od_roi(images, m_od) if use_od_roi_crop else (images * m_od)
             i_vessel = images * m_vessel
 
             logits = detector(images, i_od, i_vessel)

@@ -304,3 +304,67 @@ class ClinicalAuditor:
             "spearman_rho": float(s_rho),
             "spearman_p": float(s_p)
         }
+
+    @staticmethod
+    @torch.no_grad()
+    def extract_clinical_biomarkers(
+        I_orig: torch.Tensor,
+        M_od: torch.Tensor,
+        M_oc: Optional[torch.Tensor],
+        M_vessel: torch.Tensor
+    ) -> Dict[str, List[float]]:
+        """
+        Menghitung biomarker klinis terukur dari masker segmentasi Tahap 1 untuk satu batch:
+        1. vCDR (Vertical Cup-to-Disc Ratio): tinggi vertikal Optic Cup / tinggi vertikal Optic Disc.
+        2. aCDR (Area Cup-to-Disc Ratio): luas piksel Optic Cup / luas piksel Optic Disc.
+        3. Vessel Density (%): persentase luas pembuluh darah terhadap area retina aktif.
+        """
+        B = I_orig.size(0)
+        vcdr_list: List[float] = []
+        acdr_list: List[float] = []
+        vd_list: List[float] = []
+
+        for b in range(B):
+            od_mask = M_od[b, 0] > 0.5
+            vessel_mask = M_vessel[b, 0] > 0.5
+            retina_mask = I_orig[b].sum(dim=0) > 1e-3
+
+            # Optic Cup secara anatomis harus berada di dalam Optic Disc
+            if M_oc is not None:
+                oc_mask = (M_oc[b, 0] > 0.5) & od_mask
+            else:
+                oc_mask = torch.zeros_like(od_mask, dtype=torch.bool)
+
+            od_area = float(od_mask.sum().item())
+            oc_area = float(oc_mask.sum().item())
+
+            if od_area > 0:
+                od_ys = torch.where(od_mask)[0]
+                od_h = float(od_ys.max().item() - od_ys.min().item() + 1)
+                if oc_area > 0:
+                    oc_ys = torch.where(oc_mask)[0]
+                    oc_h = float(oc_ys.max().item() - oc_ys.min().item() + 1)
+                    vcdr = min(1.0, oc_h / max(od_h, 1.0))
+                else:
+                    vcdr = 0.0
+                acdr = min(1.0, oc_area / od_area)
+            else:
+                vcdr = float("nan")
+                acdr = float("nan")
+
+            retina_area = float(retina_mask.sum().item())
+            if retina_area > 0:
+                vessel_area = float((vessel_mask & retina_mask).sum().item())
+                vessel_density = (vessel_area / retina_area) * 100.0
+            else:
+                vessel_density = float("nan")
+
+            vcdr_list.append(vcdr)
+            acdr_list.append(acdr)
+            vd_list.append(vessel_density)
+
+        return {
+            "vcdr": vcdr_list,
+            "acdr": acdr_list,
+            "vessel_density": vd_list
+        }

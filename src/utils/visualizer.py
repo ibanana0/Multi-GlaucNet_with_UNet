@@ -272,7 +272,8 @@ def save_gradcam_multibranch_plot(
             return np.clip(overlay, 0.0, 1.0)
 
         overlay_orig = get_overlay(img_orig, cams.get("orig", np.zeros_like(img_orig[:, :, 0])))
-        overlay_od = get_overlay(img_orig, cams.get("od", np.zeros_like(img_orig[:, :, 0])))
+        # Overlay Grad-CAM OD langsung pada img_od agar tetap selaras saat ROI-cropped
+        overlay_od = get_overlay(img_od, cams.get("od", np.zeros_like(img_od[:, :, 0])))
         overlay_vessel = get_overlay(img_orig, cams.get("vessel", np.zeros_like(img_orig[:, :, 0])))
 
         # Tampilkan pada baris
@@ -286,7 +287,9 @@ def save_gradcam_multibranch_plot(
         # Label kategori di sebelah kiri
         label_str = "Glaukoma" if case["true_label"] == 1 else "Normal"
         pred_str = "Glaukoma" if case["prob"] >= 0.5 else "Normal"
-        row_label = f"[{case['category']}]\nID: {case['image_id']}\nGT: {label_str}\nPred: {pred_str} (P={case['prob']:.2f})"
+        vcdr_val = case.get("vcdr", None)
+        vcdr_line = f"\nvCDR: {vcdr_val:.2f}" if (vcdr_val is not None and np.isfinite(vcdr_val)) else ""
+        row_label = f"[{case['category']}]\nID: {case['image_id']}\nGT: {label_str}\nPred: {pred_str} (P={case['prob']:.2f}){vcdr_line}"
         axes[row_idx, 0].set_ylabel(row_label, fontsize=10, fontweight="semibold")
 
         for c in range(n_cols):

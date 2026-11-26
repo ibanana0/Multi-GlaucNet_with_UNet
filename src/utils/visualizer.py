@@ -286,7 +286,9 @@ def save_gradcam_multibranch_plot(
         # Label kategori di sebelah kiri
         label_str = "Glaukoma" if case["true_label"] == 1 else "Normal"
         pred_str = "Glaukoma" if case["prob"] >= 0.5 else "Normal"
-        row_label = f"[{case['category']}]\nID: {case['image_id']}\nGT: {label_str}\nPred: {pred_str} (P={case['prob']:.2f})"
+        vcdr_val = case.get("vcdr", None)
+        vcdr_line = f"\nvCDR: {vcdr_val:.2f}" if (vcdr_val is not None and np.isfinite(vcdr_val)) else ""
+        row_label = f"[{case['category']}]\nID: {case['image_id']}\nGT: {label_str}\nPred: {pred_str} (P={case['prob']:.2f}){vcdr_line}"
         axes[row_idx, 0].set_ylabel(row_label, fontsize=10, fontweight="semibold")
 
         for c in range(n_cols):
